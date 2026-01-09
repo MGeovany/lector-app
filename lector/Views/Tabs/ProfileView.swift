@@ -79,8 +79,8 @@ struct ProfileView: View {
                         SettingsRowView(
                             icon: "moon.stars",
                             title: "Theme",
-                            trailingText: (AppTheme(rawValue: themeRawValue) ?? .dark).title
-                            ,
+                            trailingText: (AppTheme(rawValue: themeRawValue) ?? .dark).title,
+                            showsChevron: false
                             showsChevron: false
                         )
                     }

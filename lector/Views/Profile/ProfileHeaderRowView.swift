@@ -28,7 +28,7 @@ struct ProfileHeaderRowView: View {
 
             Spacer()
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 2)
     }
 }
 

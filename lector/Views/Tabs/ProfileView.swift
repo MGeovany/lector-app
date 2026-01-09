@@ -67,8 +67,8 @@ struct ProfileView: View {
                         SettingsRowView(
                             icon: "globe",
                             title: "Language",
-                            trailingText: (AppLanguage(rawValue: languageRawValue) ?? .english).title
-                            ,
+                            trailingText: (AppLanguage(rawValue: languageRawValue) ?? .english).title,
+                            showsChevron: false
                             showsChevron: false
                         )
                     }

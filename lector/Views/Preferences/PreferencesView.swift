@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct PreferencesView: View {
-  @StateObject private var viewModel = PreferencesViewModel()
+  @EnvironmentObject private var viewModel: PreferencesViewModel
   @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {

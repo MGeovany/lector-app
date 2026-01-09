@@ -7,7 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		F0A1B2C3D4E5F67890123457 /* FontRegistrar.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0A1B2C3D4E5F67890123456 /* FontRegistrar.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -133,7 +132,6 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				F0A1B2C3D4E5F67890123457 /* FontRegistrar.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -10,6 +10,7 @@ import SwiftUI
 struct FavoritesView: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var query: String = ""
+    @State private var selectedBook: Book?
 
     // Mock favorites for now (UX-focused). Replace with persistence later.
     @State private var books: [Book] = [
@@ -59,6 +60,14 @@ struct FavoritesView: View {
             }
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
+            .navigationDestination(item: $selectedBook) { book in
+                ReaderView(
+                    book: book,
+                    onProgressChange: { page, total in
+                        updateBookProgress(bookID: book.id, page: page, totalPages: total)
+                    }
+                )
+            }
         }
     }
 
@@ -93,7 +102,6 @@ struct FavoritesView: View {
             VStack(alignment: .leading, spacing: 14) {
                 FavoritesHeaderView(filteredFavorites: filteredFavorites)
                 FavoritesSearchBar(text: $query)
-                
                 if filteredFavorites.isEmpty {
                     inlineEmptyState
                 } else {
@@ -101,6 +109,7 @@ struct FavoritesView: View {
                         ForEach(filteredFavorites) { book in
                             BookCardView(
                                 book: book,
+                                onOpen: { selectedBook = book },
                                 onToggleRead: { toggleRead(bookID: book.id) },
                                 onToggleFavorite: { toggleFavorite(bookID: book.id) }
                             )
@@ -199,6 +208,13 @@ struct FavoritesView: View {
             guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
             books[idx].isFavorite.toggle()
         }
+    }
+
+    private func updateBookProgress(bookID: UUID, page: Int, totalPages: Int) {
+        guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
+        books[idx].pagesTotal = max(1, totalPages)
+        books[idx].currentPage = min(max(1, page), books[idx].pagesTotal)
+        books[idx].isRead = (books[idx].currentPage >= books[idx].pagesTotal)
     }
 }
 

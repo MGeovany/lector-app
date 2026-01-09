@@ -7,6 +7,7 @@ struct CenteredConfirmationModal: View {
   let isDestructive: Bool
   let onConfirm: () -> Void
   let onCancel: () -> Void
+  @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
     ZStack {
@@ -17,11 +18,11 @@ struct CenteredConfirmationModal: View {
       VStack(alignment: .leading, spacing: 10) {
         Text(title)
           .font(.system(size: 17, weight: .semibold))
-          .foregroundStyle(.black)
+          .foregroundStyle(.primary)
 
         Text(message)
           .font(.system(size: 14, weight: .regular))
-          .foregroundStyle(Color.black.opacity(0.65))
+          .foregroundStyle(.secondary)
           .fixedSize(horizontal: false, vertical: true)
 
         HStack(spacing: 10) {
@@ -35,13 +36,12 @@ struct CenteredConfirmationModal: View {
       }
       .padding(16)
       .frame(maxWidth: 340)
-      // Requested: white background (not gray material).
-      .background(Color.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+      .background(Color(.systemBackground), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
       .overlay(
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .stroke(Color.black.opacity(0.08), lineWidth: 1)
+          .stroke(Color(.separator), lineWidth: 1)
       )
-      .shadow(color: Color.black.opacity(0.25), radius: 24, x: 0, y: 10)
+      .shadow(color: Color.black.opacity(colorScheme == .light ? 0.25 : 0.6), radius: 24, x: 0, y: 10)
       .padding(.horizontal, 24)
     }
     .accessibilityAddTraits(.isModal)
@@ -75,7 +75,7 @@ private struct CenteredModalButtonStyle: ButtonStyle {
     case .primary:
       return AppColors.primaryButtonFill(for: colorScheme)
     case .secondary:
-      return Color.white
+      return Color(.secondarySystemBackground)
     case .destructive:
       return Color.red
     }
@@ -86,7 +86,7 @@ private struct CenteredModalButtonStyle: ButtonStyle {
     case .primary, .destructive:
       return .white
     case .secondary:
-      return .black
+      return Color.primary
     }
   }
 }

@@ -1,5 +1,5 @@
 //
-//  favoritesView.swift
+//  FavoritesView.swift
 //  lector
 //
 //  Created by Marlon Castro on 7/1/26.

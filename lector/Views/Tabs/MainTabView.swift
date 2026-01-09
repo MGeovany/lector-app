@@ -10,6 +10,7 @@ struct MainTabView: View {
   }
 
   @State private var selectedTab: Tab = .home
+  @State private var isTabBarHidden: Bool = false
   @Environment(\.colorScheme) private var colorScheme
 
   var body: some View {
@@ -32,12 +33,19 @@ struct MainTabView: View {
     // We render a custom tab bar; hide the system one.
     .toolbar(.hidden, for: .tabBar)
     .safeAreaInset(edge: .bottom, spacing: 0) {
-      tabBar
-        // Extend the bar to the absolute bottom (covers the home-indicator safe area)
-        // to avoid a white gap below the bar.
-        .ignoresSafeArea(.container, edges: .bottom)
+      if !isTabBarHidden {
+        tabBar
+          // Extend the bar to the absolute bottom (covers the home-indicator safe area)
+          // to avoid a white gap below the bar.
+          .ignoresSafeArea(.container, edges: .bottom)
+      }
     }
     .animation(.spring(response: 0.28, dampingFraction: 0.9), value: selectedTab)
+    .onPreferenceChange(TabBarHiddenPreferenceKey.self) { shouldHide in
+      withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+        isTabBarHidden = shouldHide
+      }
+    }
   }
 
   private var tabBar: some View {
@@ -127,5 +135,6 @@ struct TabBarItemButton: View {
 
 #Preview {
   MainTabView()
+    .environmentObject(PreferencesViewModel())
     .environmentObject(SubscriptionStore())
 }

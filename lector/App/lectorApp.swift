@@ -9,16 +9,18 @@ import SwiftUI
 
 @main
 struct lectorApp: App {
-  @StateObject private var subscription = SubscriptionStore()
+    @StateObject private var preferences = PreferencesViewModel()
+    @StateObject private var subscription = SubscriptionStore()
 
-  init() {
-    FontRegistrar.registerCinzelDecorativeIfNeeded()
-  }
-
-  var body: some Scene {
-    WindowGroup {
-      ContentView()
-        .environmentObject(subscription)
+    init() {
+        FontRegistrar.registerCinzelDecorativeIfNeeded()
     }
-  }
+
+    var body: some Scene {
+        WindowGroup {
+            ContentView()
+                .environmentObject(preferences)
+                .environmentObject(subscription)
+        }
+    }
 }

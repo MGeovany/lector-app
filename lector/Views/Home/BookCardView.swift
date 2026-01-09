@@ -3,6 +3,7 @@ import SwiftUI
 struct BookCardView: View {
     @Environment(\.colorScheme) private var colorScheme
     let book: Book
+    let onOpen: () -> Void
     let onToggleRead: () -> Void
     let onToggleFavorite: () -> Void
 
@@ -29,16 +30,20 @@ struct BookCardView: View {
                 Spacer()
 
                 HStack(spacing: 6) {
-                   
+                    Button(action: onToggleFavorite) {
+                        Image(systemName: book.isFavorite ? "heart.fill" : "heart")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundStyle(book.isFavorite ? Color.red.opacity(0.90) : (colorScheme == .dark ? Color.white.opacity(0.70) : .secondary))
+                            .frame(width: 36, height: 36)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(book.isFavorite ? "Remove from favorites" : "Add to favorites")
 
                     Menu {
-                        Button {
-                            onToggleRead()
-                        } label: {
+                        Button(action: onToggleRead) {
                             Label(book.isRead ? "Mark as unread" : "Mark as read", systemImage: "checkmark")
                         }
-
-                      
 
                         Divider()
 
@@ -100,6 +105,8 @@ struct BookCardView: View {
                         .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.5), lineWidth: 1)
                 )
         )
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .onTapGesture(perform: onOpen)
     }
 
     private var cover: some View {
@@ -159,11 +166,9 @@ struct BookCardView: View {
             isFavorite: true,
             tags: ["Book"]
         ),
+        onOpen: {},
         onToggleRead: {},
         onToggleFavorite: {}
     )
     .padding()
-    .background(Color.white)
 }
-
-

@@ -11,7 +11,7 @@ struct Book: Identifiable, Hashable {
     let id: UUID = UUID()
     let title: String
     let author: String
-    let pagesTotal: Int
+    var pagesTotal: Int
     var currentPage: Int
     let sizeBytes: Int64
     let lastOpenedDaysAgo: Int

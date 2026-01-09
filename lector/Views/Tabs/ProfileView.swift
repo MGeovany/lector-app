@@ -203,7 +203,7 @@ struct ProfileView: View {
         let body = "Hi Marlon,\n\nI need help with:\n\n"
         let encodedSubject = subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
         let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? body
-        return URL(string: "mailto:\(email)?subject=\(encodedSubject)&body=\(encodedBody)")!
+        return URL(string: "mailto:\(email)?subject=\(encodedSubject)&body=\(encodedBody)") ?? URL(string: "mailto:\(email)")!
     }
 
     private func deleteAccountLocally() {

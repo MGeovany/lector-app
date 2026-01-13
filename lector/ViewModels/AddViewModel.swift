@@ -41,14 +41,26 @@ final class AddViewModel {
   }
 
   private func validateQuotaAndSize(nextFileBytes: Int64) async throws {
-    let maxBytes = Int64(MAX_STORAGE_MB) * 1024 * 1024
+    let plan = currentPlanFromDefaults()
+    let maxBytes: Int64 = {
+      switch plan {
+      case .free:
+        return Int64(MAX_STORAGE_MB) * 1024 * 1024
+      case .proMonthly, .proYearly, .founderLifetime:
+        // Keep a reasonable per-file cap (backend may enforce too).
+        return Int64(MAX_STORAGE_PREMIUM_MB) * 1024 * 1024
+      }
+    }()
 
     if nextFileBytes > maxBytes {
       throw APIError.server(
         statusCode: 400,
-        message: "File too large. Maximum single file size is \(MAX_STORAGE_MB)MB."
+        message: "File too large. Maximum single file size is \(Int(maxBytes / 1024 / 1024))MB."
       )
     }
+
+    // Pro/Founder: treat quota as unlimited in-app. Backend can still enforce.
+    if plan != .free { return }
 
     // Best-effort precheck to match web UX. Backend also enforces this.
     let docs = try await documentsService.getDocumentsByUserID(userID)
@@ -59,6 +71,17 @@ final class AddViewModel {
         message: "Storage limit reached (\(MAX_STORAGE_MB)MB). Delete a document or upgrade."
       )
     }
+  }
+
+  private func currentPlanFromDefaults() -> SubscriptionPlan {
+    if let raw = UserDefaults.standard.string(forKey: SubscriptionStore.planKey),
+      let plan = SubscriptionPlan(rawValue: raw)
+    {
+      return plan
+    }
+    // Back-compat
+    let legacyPremium = UserDefaults.standard.bool(forKey: SubscriptionStore.legacyIsPremiumKey)
+    return legacyPremium ? .proYearly : .free
   }
 
   private static func readSecurityScopedFile(_ url: URL) throws -> Data {

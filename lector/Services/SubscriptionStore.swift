@@ -1,36 +1,406 @@
 import Combine
 import Foundation
+import StoreKit
+import UIKit
+
+enum SubscriptionPlan: String, CaseIterable, Equatable, Hashable, Identifiable {
+  case free
+  case proMonthly
+  case proYearly
+  case founderLifetime
+
+  var id: String { rawValue }
+
+  var isPremium: Bool {
+    switch self {
+    case .free: return false
+    case .proMonthly, .proYearly, .founderLifetime: return true
+    }
+  }
+
+  var isPro: Bool {
+    switch self {
+    case .proMonthly, .proYearly: return true
+    default: return false
+    }
+  }
+
+  var isFounder: Bool {
+    self == .founderLifetime
+  }
+}
+
+enum BillingCycle: String, CaseIterable, Equatable {
+  case monthly
+  case yearly
+}
 
 final class SubscriptionStore: ObservableObject {
-    @Published var isPremium: Bool {
-        didSet {
-            UserDefaults.standard.set(isPremium, forKey: Self.isPremiumKey)
+  private let persistToDefaults: Bool
+
+  @Published var plan: SubscriptionPlan {
+    didSet {
+      guard persistToDefaults else { return }
+      UserDefaults.standard.set(plan.rawValue, forKey: Self.planKey)
+      // Back-compat: older builds used a boolean.
+      UserDefaults.standard.set(plan.isPremium, forKey: Self.legacyIsPremiumKey)
+    }
+  }
+
+  @Published private(set) var isPurchasing: Bool = false
+  @Published private(set) var lastErrorMessage: String?
+  @Published private(set) var expirationDate: Date?
+  @Published private(set) var isAutoRenewable: Bool = false
+
+  @MainActor private let storeKit = StoreKitService()
+
+  init(initialPlan: SubscriptionPlan? = nil, persistToDefaults: Bool = true) {
+    self.persistToDefaults = persistToDefaults
+
+    // Prefer explicit initial plan (useful for Previews/tests), otherwise load persisted plan.
+    if let initialPlan {
+      self.plan = initialPlan
+    } else if
+      let raw = UserDefaults.standard.string(forKey: Self.planKey),
+      let plan = SubscriptionPlan(rawValue: raw)
+    {
+      self.plan = plan
+    } else {
+      let legacyPremium = UserDefaults.standard.bool(forKey: Self.legacyIsPremiumKey)
+      self.plan = legacyPremium ? .proYearly : .free
+      UserDefaults.standard.set(self.plan.rawValue, forKey: Self.planKey)
+    }
+
+    // Best-effort: sync entitlements at startup (skip in Xcode Previews).
+    let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+    if !isPreview {
+      Task { await refreshFromStoreKit() }
+    }
+  }
+
+  // MARK: - Derived state
+
+  var isPremium: Bool { plan.isPremium }
+  var isPro: Bool { plan.isPro }
+  var isFounder: Bool { plan.isFounder }
+
+  /// Free is capped. Pro/Founder are "Unlimited" in-app UX. Backend may still enforce limits.
+  var maxStorageBytes: Int64 {
+    switch plan {
+    case .free:
+      return Int64(MAX_STORAGE_MB) * 1024 * 1024
+    case .proMonthly, .proYearly, .founderLifetime:
+      return Int64.max / 4
+    }
+  }
+
+  var maxStorageText: String {
+    switch plan {
+    case .free:
+      return ByteCountFormatter.string(fromByteCount: maxStorageBytes, countStyle: .file)
+    case .proMonthly, .proYearly, .founderLifetime:
+      return "Unlimited"
+    }
+  }
+
+  /// If Pro is active and auto-renewable, returns remaining whole days until expiration/renewal.
+  var remainingDaysInPeriod: Int? {
+    guard isAutoRenewable, let expirationDate else { return nil }
+    let days =
+      Calendar.current.dateComponents([.day], from: Date(), to: expirationDate).day
+      ?? 0
+    return max(0, days)
+  }
+
+  // MARK: - Actions (StoreKit 2)
+
+  @MainActor
+  func purchase(_ newPlan: SubscriptionPlan) async {
+    guard !isPurchasing else { return }
+    isPurchasing = true
+    lastErrorMessage = nil
+    defer { isPurchasing = false }
+
+    if newPlan == .free {
+      setFree()
+      return
+    }
+
+    do {
+      try await storeKit.loadProducts()
+      let ent = try await storeKit.purchase(plan: newPlan)
+      apply(entitlement: ent)
+    } catch {
+      lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Purchase failed."
+    }
+  }
+
+  func setFree() {
+    plan = .free
+    expirationDate = nil
+    isAutoRenewable = false
+  }
+
+  func upgradeToPremium() {
+    // Backward-compatible call site: default to yearly Pro.
+    plan = .proYearly
+  }
+
+  func downgradeToFree() {
+    plan = .free
+  }
+
+  @MainActor
+  func restorePurchases() async {
+    guard !isPurchasing else { return }
+    isPurchasing = true
+    lastErrorMessage = nil
+    defer { isPurchasing = false }
+
+    do {
+      try await storeKit.restorePurchases()
+      apply(entitlement: storeKit.entitlement)
+    } catch {
+      lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Restore failed."
+    }
+  }
+
+  @MainActor
+  func refreshFromStoreKit() async {
+    do {
+      try await storeKit.loadProducts()
+    } catch {
+      // Non-fatal (e.g., product IDs not set yet). Still try entitlements.
+    }
+    await storeKit.refreshEntitlements()
+    apply(entitlement: storeKit.entitlement)
+  }
+
+  @MainActor
+  func showManageSubscriptions() async {
+    do {
+      try await storeKit.showManageSubscriptions()
+    } catch {
+      lastErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn’t open subscriptions."
+    }
+  }
+
+  @MainActor
+  func priceText(for plan: SubscriptionPlan) -> String? {
+    guard let product = storeKit.productsByPlan[plan] else { return nil }
+    return product.displayPrice
+  }
+
+  private func apply(entitlement: StoreKitService.Entitlement) {
+    plan = entitlement.plan
+    expirationDate = entitlement.expirationDate
+    isAutoRenewable = entitlement.isAutoRenewable
+  }
+
+  static let planKey = "lector_subscription_plan"
+  static let legacyIsPremiumKey = "lector_isPremium"
+}
+
+// MARK: - StoreKit 2
+
+enum StoreKitServiceError: LocalizedError {
+  case productIDsNotConfigured
+  case productNotFound(String)
+  case purchaseCancelled
+  case purchasePending
+  case purchaseUnverified
+
+  var errorDescription: String? {
+    switch self {
+    case .productIDsNotConfigured:
+      return "In‑app purchase product IDs are not configured. Add them to Info.plist."
+    case .productNotFound(let id):
+      return "Product not found: \(id)"
+    case .purchaseCancelled:
+      return "Purchase cancelled."
+    case .purchasePending:
+      return "Purchase pending approval."
+    case .purchaseUnverified:
+      return "Purchase could not be verified."
+    }
+  }
+}
+
+/// StoreKit 2 service that backs subscription UI and state.
+@MainActor
+final class StoreKitService: ObservableObject {
+  struct ProductIDs: Equatable {
+    let proMonthly: String
+    let proYearly: String
+    let founderLifetime: String
+  }
+
+  struct Entitlement: Equatable {
+    let plan: SubscriptionPlan
+    let expirationDate: Date?
+    let isAutoRenewable: Bool
+  }
+
+  @Published private(set) var productsByPlan: [SubscriptionPlan: Product] = [:]
+  @Published private(set) var entitlement: Entitlement = .init(plan: .free, expirationDate: nil, isAutoRenewable: false)
+
+  private let productIDs: ProductIDs?
+
+  init(productIDs: ProductIDs? = nil) {
+    self.productIDs = productIDs ?? Self.loadProductIDsFromInfoPlist()
+  }
+
+  func loadProducts() async throws {
+    guard let productIDs else { throw StoreKitServiceError.productIDsNotConfigured }
+    let ids: [String] = [productIDs.proMonthly, productIDs.proYearly, productIDs.founderLifetime]
+
+    let products = try await Product.products(for: ids)
+    var map: [SubscriptionPlan: Product] = [:]
+    for product in products {
+      switch product.id {
+      case productIDs.proMonthly:
+        map[.proMonthly] = product
+      case productIDs.proYearly:
+        map[.proYearly] = product
+      case productIDs.founderLifetime:
+        map[.founderLifetime] = product
+      default:
+        break
+      }
+    }
+    productsByPlan = map
+  }
+
+  func refreshEntitlements() async {
+    let best = await Self.bestEntitlementFromCurrentEntitlements()
+    entitlement = best ?? .init(plan: .free, expirationDate: nil, isAutoRenewable: false)
+  }
+
+  func restorePurchases() async throws {
+    try await AppStore.sync()
+    await refreshEntitlements()
+  }
+
+  func purchase(plan: SubscriptionPlan) async throws -> Entitlement {
+    guard plan != .free else {
+      let free = Entitlement(plan: .free, expirationDate: nil, isAutoRenewable: false)
+      entitlement = free
+      return free
+    }
+
+    guard let product = productsByPlan[plan] else {
+      // Try one lazy load before failing.
+      try await loadProducts()
+      guard let product = productsByPlan[plan] else {
+        throw StoreKitServiceError.productNotFound(plan.rawValue)
+      }
+      return try await purchaseProduct(product, expectedPlan: plan)
+    }
+
+    return try await purchaseProduct(product, expectedPlan: plan)
+  }
+
+  func showManageSubscriptions() async throws {
+    guard let scene = UIApplication.shared.connectedScenes.first(where: { $0 is UIWindowScene }) as? UIWindowScene else {
+      return
+    }
+    try await AppStore.showManageSubscriptions(in: scene)
+  }
+
+  // MARK: - Internals
+
+  private func purchaseProduct(_ product: Product, expectedPlan: SubscriptionPlan) async throws -> Entitlement {
+    let result = try await product.purchase()
+    switch result {
+    case .success(let verification):
+      let transaction = try Self.requireVerified(verification)
+      await transaction.finish()
+      await refreshEntitlements()
+      return entitlement.plan == .free
+        ? Entitlement(plan: expectedPlan, expirationDate: nil, isAutoRenewable: product.type == .autoRenewable)
+        : entitlement
+    case .userCancelled:
+      throw StoreKitServiceError.purchaseCancelled
+    case .pending:
+      throw StoreKitServiceError.purchasePending
+    @unknown default:
+      throw StoreKitServiceError.purchaseUnverified
+    }
+  }
+
+  private static func bestEntitlementFromCurrentEntitlements() async -> Entitlement? {
+    var best: Entitlement?
+
+    for await result in Transaction.currentEntitlements {
+      guard let transaction = try? requireVerified(result) else { continue }
+
+      let plan: SubscriptionPlan = {
+        if let ids = loadProductIDsFromInfoPlist() {
+          if transaction.productID == ids.founderLifetime { return .founderLifetime }
+          if transaction.productID == ids.proYearly { return .proYearly }
+          if transaction.productID == ids.proMonthly { return .proMonthly }
         }
+        return .free
+      }()
+
+      guard plan != .free else { continue }
+
+      let ent = Entitlement(
+        plan: plan,
+        expirationDate: transaction.expirationDate,
+        isAutoRenewable: transaction.productType == .autoRenewable
+      )
+
+      best = pickBest(best, ent)
     }
 
-    init() {
-        self.isPremium = UserDefaults.standard.bool(forKey: Self.isPremiumKey)
+    return best
+  }
+
+  private static func pickBest(_ a: Entitlement?, _ b: Entitlement) -> Entitlement {
+    guard let a else { return b }
+
+    func rank(_ p: SubscriptionPlan) -> Int {
+      switch p {
+      case .free: return 0
+      case .proMonthly: return 1
+      case .proYearly: return 2
+      case .founderLifetime: return 3
+      }
     }
 
-    var maxStorageBytes: Int64 {
-        Int64(maxStorageMB) * 1024 * 1024
+    if rank(b.plan) != rank(a.plan) {
+      return rank(b.plan) > rank(a.plan) ? b : a
     }
 
-    var maxStorageText: String {
-        ByteCountFormatter.string(fromByteCount: maxStorageBytes, countStyle: .file)
+    switch (a.expirationDate, b.expirationDate) {
+    case (nil, _): return a
+    case (_, nil): return b
+    case (let ad?, let bd?):
+      return bd > ad ? b : a
     }
+  }
 
-    var maxStorageMB: Int {
-        isPremium ? MAX_STORAGE_PREMIUM_MB : MAX_STORAGE_MB
+  private static func requireVerified<T>(_ result: VerificationResult<T>) throws -> T {
+    switch result {
+    case .verified(let safe): return safe
+    case .unverified:
+      throw StoreKitServiceError.purchaseUnverified
     }
+  }
 
-    func upgradeToPremium() {
-        isPremium = true
+  private static func loadProductIDsFromInfoPlist() -> ProductIDs? {
+    func str(_ key: String) -> String? {
+      (Bundle.main.object(forInfoDictionaryKey: key) as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines)
     }
-
-    func downgradeToFree() {
-        isPremium = false
+    guard
+      let proMonthly = str("PRO_MONTHLY_PRODUCT_ID"), !proMonthly.isEmpty,
+      let proYearly = str("PRO_YEARLY_PRODUCT_ID"), !proYearly.isEmpty,
+      let founderLifetime = str("FOUNDER_LIFETIME_PRODUCT_ID"), !founderLifetime.isEmpty
+    else {
+      return nil
     }
-
-    private static let isPremiumKey = "lector_isPremium"
+    return ProductIDs(proMonthly: proMonthly, proYearly: proYearly, founderLifetime: founderLifetime)
+  }
 }

@@ -11,7 +11,11 @@ struct FavoritesView: View {
   @Environment(\.colorScheme) private var colorScheme
   @State private var query: String = ""
   @State private var selectedBook: Book?
-  @State private var viewModel = HomeViewModel()
+  @State private var viewModel: HomeViewModel
+
+  init(viewModel: HomeViewModel? = nil) {
+    _viewModel = State(initialValue: viewModel ?? HomeViewModel())
+  }
 
   var body: some View {
     NavigationStack {
@@ -63,100 +67,67 @@ struct FavoritesView: View {
   }
 
   private var content: some View {
-    ScrollView(showsIndicators: false) {
-      VStack(alignment: .leading, spacing: 14) {
-        FavoritesHeaderView(filteredFavorites: filteredFavorites)
-        FavoritesSearchBar(text: $query)
-        if filteredFavorites.isEmpty {
-          inlineEmptyState
-        } else {
-          LazyVStack(spacing: 14) {
-            ForEach(filteredFavorites) { book in
-              BookCardView(
-                book: book,
-                onOpen: { selectedBook = book },
-                onToggleRead: { viewModel.toggleRead(bookID: book.id) },
-                onToggleFavorite: { viewModel.toggleFavorite(bookID: book.id) }
-              )
+    GeometryReader { geometry in
+      ScrollView(showsIndicators: false) {
+        VStack(alignment: .leading, spacing: 14) {
+          FavoritesHeaderView(filteredFavorites: filteredFavorites)
+          FavoritesSearchBar(text: $query)
+          if filteredFavorites.isEmpty {
+            inlineEmptyState
+              .frame(minHeight: geometry.size.height - 300)
+          } else {
+            LazyVStack(spacing: 14) {
+              ForEach(filteredFavorites) { book in
+                BookCardView(
+                  book: book,
+                  onOpen: { selectedBook = book },
+                  onToggleRead: { viewModel.toggleRead(bookID: book.id) },
+                  onToggleFavorite: { viewModel.toggleFavorite(bookID: book.id) }
+                )
+              }
             }
           }
         }
+        .padding(.bottom, 24)
       }
-      .padding(.bottom, 24)
+      .environment(viewModel)
     }
-    .environment(viewModel)
   }
 
   private var inlineEmptyState: some View {
-    VStack(spacing: 12) {
-      ZStack {
-        Circle()
-          .fill(
-            colorScheme == .dark
-              ? Color.white.opacity(0.10) : Color(.secondarySystemGroupedBackground)
-          )
-          .frame(width: 56, height: 56)
-          .overlay(
-            Circle()
-              .stroke(
-                colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5),
-                lineWidth: 1)
-          )
+    VStack(spacing: 20) {
+      Spacer()
 
+      VStack(spacing: 16) {
         Image(
-          systemName: query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "heart" : "magnifyingglass"
+          systemName:
+            "\(query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "heart" : "magnifyingglass")"
         )
-        .font(.parkinsansSemibold(size: 22))
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.90) : .secondary)
-      }
+        .font(.parkinsans(size: 26, weight: .light))
+        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : AppColors.matteBlack)
 
-      VStack(spacing: 4) {
-        Text(
-          query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "No favorites yet" : "No matches"
-        )
-        .font(.parkinsansBold(size: 18))
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
+        VStack(spacing: 8) {
+          Text(
+            query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              ? "No favorites yet" : "No Matches"
+          )
+          .font(.parkinsansBold(size: 20))
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
 
-        Text(
-          query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? "Save books you love to find them faster here."
-            : "Try a different search."
-        )
-        .font(.parkinsansSemibold(size: 14))
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
-        .multilineTextAlignment(.center)
-      }
-
-      if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        Button {
-          withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-            query = ""
-          }
-        } label: {
-          Label("Reset", systemImage: "arrow.counterclockwise")
-            .font(.parkinsansSemibold(size: 15))
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.90) : .primary)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-              Capsule(style: .continuous)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.12) : Color(.systemBackground))
-                .overlay(
-                  Capsule(style: .continuous)
-                    .stroke(
-                      colorScheme == .dark
-                        ? Color.white.opacity(0.14) : Color(.separator).opacity(0.5), lineWidth: 1)
-                )
-            )
+          Text(
+            query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+              ? "Save books you love to find them faster here."
+              : "Try a different search."
+          )
+          .font(.parkinsans(size: 15, weight: .regular))
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
+          .multilineTextAlignment(.center)
+          .padding(.horizontal, 32)
         }
-        .buttonStyle(.plain)
       }
+      Spacer()
     }
-    .frame(maxWidth: 420)
     .frame(maxWidth: .infinity)
-    .padding(.vertical, 24)
   }
 
   private var filteredFavorites: [Book] {
@@ -189,12 +160,15 @@ private struct FavoritesSearchBar: View {
         .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
 
       TextField("Search favorites", text: $text)
-        .focused($isFocused)
+        .font(.parkinsansMedium(size: 16))
+        .foregroundStyle(
+          colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack
+        )
+        .foregroundStyle(
+          colorScheme == .dark ? Color.white.opacity(0.22) : .secondary
+        )
         .textInputAutocapitalization(.never)
         .disableAutocorrection(true)
-        .submitLabel(.search)
-        .font(.parkinsansSemibold(size: 15))
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
 
       if !text.isEmpty {
         Button {
@@ -228,5 +202,85 @@ private struct FavoritesSearchBar: View {
 }
 
 #Preview {
-  FavoritesView()
+  // Mock DocumentsService for preview with a favorite book
+  struct MockDocumentsService: DocumentsServicing {
+    func getDocumentsByUserID(_ userID: String) async throws -> [RemoteDocument] {
+      // Return a mock favorite document for preview
+      let jsonString = """
+        {
+          "id": "mock-fav-doc-1",
+          "user_id": "\(userID)",
+          "title": "The Art of SwiftUI",
+          "author": "Jane Smith",
+          "description": "A comprehensive guide to building modern iOS apps",
+          "content": null,
+          "metadata": {
+            "original_title": "The Art of SwiftUI",
+            "original_author": "Jane Smith",
+            "language": "en",
+            "page_count": 245,
+            "word_count": 45000,
+            "file_size": 2500000,
+            "format": "pdf",
+            "source": "upload",
+            "has_password": false
+          },
+          "tag": "programming",
+          "is_favorite": true,
+          "created_at": "2024-01-15T10:00:00Z",
+          "updated_at": "2024-01-15T10:00:00Z"
+        }
+        """
+
+      let jsonData = jsonString.data(using: .utf8)!
+      let decoder = JSONDecoder()
+      decoder.dateDecodingStrategy = .iso8601
+      let mockDocument = try decoder.decode(RemoteDocument.self, from: jsonData)
+      return [mockDocument]
+    }
+
+    func getDocument(id: String) async throws -> RemoteDocumentDetail {
+      throw NSError(domain: "Preview", code: 0)
+    }
+
+    func updateDocument(documentID: String, title: String?, author: String?, tag: String?)
+      async throws
+      -> RemoteDocumentDetail
+    {
+      throw NSError(domain: "Preview", code: 0)
+    }
+
+    func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument {
+      throw NSError(domain: "Preview", code: 0)
+    }
+
+    func setFavorite(documentID: String, isFavorite: Bool) async throws {
+      // No-op for preview
+    }
+
+    func getDocumentTags() async throws -> [String] {
+      ["programming", "fiction", "work"]
+    }
+
+    func createDocumentTag(name: String) async throws {}
+
+    func deleteDocumentTag(name: String) async throws {}
+
+    func getRecentDocumentsByUserID(_ userID: String, since: Date, limit: Int) async throws
+      -> [RemoteDocument]
+    {
+      return try await getDocumentsByUserID(userID)
+    }
+  }
+
+  let mockService = MockDocumentsService()
+  let mockViewModel = HomeViewModel(documentsService: mockService, userID: "preview-user")
+
+  return FavoritesView(viewModel: mockViewModel)
+    .environment(mockViewModel)
+    .environmentObject(PreferencesViewModel())
+    .environment(AppSession())
+    .task {
+      await mockViewModel.reload()
+    }
 }

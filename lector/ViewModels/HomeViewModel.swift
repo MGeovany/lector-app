@@ -8,6 +8,7 @@ final class HomeViewModel {
   var selectedBook: Book?
 
   private(set) var books: [Book] = []
+  private(set) var availableTags: [String] = []
   private(set) var isLoading: Bool = false
   var alertMessage: String?
 
@@ -39,6 +40,7 @@ final class HomeViewModel {
       Task { await self.reload() }
     }
     Task { await reload() }
+    Task { await refreshTags() }
   }
 
   deinit {
@@ -115,6 +117,88 @@ final class HomeViewModel {
 
   private func recencyDate(for doc: RemoteDocument) -> Date {
     max(doc.createdAt, doc.updatedAt)
+  }
+
+  func refreshTags() async {
+    do {
+      let tags = try await documentsService.getDocumentTags()
+      availableTags = tags.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    } catch {
+      // Non-blocking; tags are optional UI.
+    }
+  }
+
+  func setTag(bookID: UUID, tag: String?) async {
+    guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
+    guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
+      alertMessage = "Missing document id."
+      return
+    }
+
+    // Backend uses single tag. To clear, send empty string to remove relationship.
+    let trimmed = tag?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let payloadTag: String? = trimmed.isEmpty ? "" : trimmed
+
+    do {
+      _ = try await documentsService.updateDocument(
+        documentID: remoteID,
+        title: nil,
+        author: nil,
+        tag: payloadTag
+      )
+      books[idx].tags = trimmed.isEmpty ? [] : [trimmed]
+      // Keep tag list fresh (if user created tags elsewhere).
+      if !trimmed.isEmpty
+        && !availableTags.contains(where: { $0.caseInsensitiveCompare(trimmed) == .orderedSame })
+      {
+        await refreshTags()
+      }
+    } catch {
+      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to update tag."
+    }
+  }
+
+  func createTag(name: String) async {
+    let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    do {
+      try await documentsService.createDocumentTag(name: trimmed)
+      await refreshTags()
+    } catch {
+      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to create tag."
+    }
+  }
+
+  func updateBookDetails(bookID: UUID, title: String, author: String, tag: String) async {
+    guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
+    guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
+      alertMessage = "Missing document id."
+      return
+    }
+
+    let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedAuthor = author.trimmingCharacters(in: .whitespacesAndNewlines)
+    let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    do {
+      _ = try await documentsService.updateDocument(
+        documentID: remoteID,
+        title: trimmedTitle,
+        author: trimmedAuthor.isEmpty ? nil : trimmedAuthor,
+        tag: trimmedTag.isEmpty ? "" : trimmedTag
+      )
+
+      books[idx].title = trimmedTitle.isEmpty ? books[idx].title : trimmedTitle
+      books[idx].author = trimmedAuthor.isEmpty ? books[idx].author : trimmedAuthor
+      books[idx].tags = trimmedTag.isEmpty ? [] : [trimmedTag]
+
+      // Keep tag list fresh if user typed a new tag name.
+      if !trimmedTag.isEmpty {
+        await refreshTags()
+      }
+    } catch {
+      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to update details."
+    }
   }
 
   func toggleRead(bookID: UUID) {

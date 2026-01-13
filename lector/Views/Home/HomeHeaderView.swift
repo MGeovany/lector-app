@@ -55,8 +55,8 @@ struct HomeHeaderView: View {
             // Handle add PDF action
           }) {
             Image(systemName: "plus")
-              .padding(.top, 10)
-              .font(.parkinsansSemibold(size: 44))
+              .padding(.top, 14)
+              .font(.parkinsans(size: 44, weight: .light))
               .foregroundStyle(
                 colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack
               )

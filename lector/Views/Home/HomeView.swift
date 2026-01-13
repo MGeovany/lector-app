@@ -84,6 +84,7 @@ struct HomeView: View {
         Text(viewModel.alertMessage ?? "")
       }
       .onAppear { viewModel.onAppear() }
+      .environment(viewModel)
     }
   }
 
@@ -231,6 +232,13 @@ struct FilterTabsView: View {
       throw NSError(domain: "Preview", code: 0)
     }
 
+    func updateDocument(documentID: String, title: String?, author: String?, tag: String?)
+      async throws
+      -> RemoteDocumentDetail
+    {
+      throw NSError(domain: "Preview", code: 0)
+    }
+
     func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument {
       throw NSError(domain: "Preview", code: 0)
     }
@@ -238,6 +246,14 @@ struct FilterTabsView: View {
     func setFavorite(documentID: String, isFavorite: Bool) async throws {
       // No-op for preview
     }
+
+    func getDocumentTags() async throws -> [String] {
+      ["programming", "fiction", "work"]
+    }
+
+    func createDocumentTag(name: String) async throws {}
+
+    func deleteDocumentTag(name: String) async throws {}
   }
 
   let mockService = MockDocumentsService()

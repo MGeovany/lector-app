@@ -6,8 +6,12 @@ protocol DocumentsServicing {
   /// Default implementation falls back to fetching all documents.
   func getRecentDocumentsByUserID(_ userID: String, since: Date, limit: Int) async throws -> [RemoteDocument]
   func getDocument(id: String) async throws -> RemoteDocumentDetail
+  func updateDocument(documentID: String, title: String?, author: String?, tag: String?) async throws -> RemoteDocumentDetail
   func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument
   func setFavorite(documentID: String, isFavorite: Bool) async throws
+  func getDocumentTags() async throws -> [String]
+  func createDocumentTag(name: String) async throws
+  func deleteDocumentTag(name: String) async throws
 }
 
 extension DocumentsServicing {
@@ -44,6 +48,17 @@ final class GoDocumentsService: DocumentsServicing {
     try await api.get("documents/\(id)")
   }
 
+  func updateDocument(documentID: String, title: String?, author: String?, tag: String?) async throws
+    -> RemoteDocumentDetail
+  {
+    struct Body: Encodable {
+      let title: String?
+      let author: String?
+      let tag: String?
+    }
+    return try await api.putJSON("documents/\(documentID)", body: Body(title: title, author: author, tag: tag))
+  }
+
   func uploadDocument(pdfData: Data, fileName: String) async throws -> RemoteDocument {
     try await api.postMultipart("documents", fileData: pdfData, fileName: fileName)
   }
@@ -54,5 +69,20 @@ final class GoDocumentsService: DocumentsServicing {
       enum CodingKeys: String, CodingKey { case isFavorite = "is_favorite" }
     }
     try await api.putJSON("documents/\(documentID)/favorite", body: Body(isFavorite: isFavorite))
+  }
+
+  func getDocumentTags() async throws -> [String] {
+    try await api.get("document-tags")
+  }
+
+  func createDocumentTag(name: String) async throws {
+    struct Body: Encodable { let name: String }
+    try await api.postJSON("document-tags", body: Body(name: name))
+  }
+
+  func deleteDocumentTag(name: String) async throws {
+    // Backend expects tag name in path
+    let encoded = name.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? name
+    try await api.delete("document-tags/\(encoded)")
   }
 }

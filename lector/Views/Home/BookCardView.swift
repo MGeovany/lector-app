@@ -2,12 +2,19 @@ import SwiftUI
 
 struct BookCardView: View {
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(HomeViewModel.self) private var homeViewModel
   let book: Book
   let onOpen: () -> Void
   let onToggleRead: () -> Void
   let onToggleFavorite: () -> Void
+  @State private var isShowingCreateTag: Bool = false
+  @State private var newTagName: String = ""
+  @State private var isShowingEditDetails: Bool = false
 
   var body: some View {
+    let documentKey = BookCardColorStore.documentKey(for: book)
+    let backgroundColor = BookCardColorStore.get(for: documentKey).color(for: colorScheme)
+
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .top, spacing: 14) {
         // cover
@@ -72,7 +79,7 @@ struct BookCardView: View {
             Divider()
 
             Button {
-              // Mock action
+              isShowingEditDetails = true
             } label: {
               Label("Edit details", systemImage: "square.and.pencil")
             }
@@ -80,12 +87,38 @@ struct BookCardView: View {
             Divider()
 
             Menu {
-              ForEach(book.tags, id: \.self) { tag in
-                Label(tag, systemImage: "tag")
+              if !book.tags.isEmpty {
+                ForEach(book.tags, id: \.self) { tag in
+                  Label(tag, systemImage: "tag")
+                }
+                Divider()
               }
 
+              ForEach(homeViewModel.availableTags, id: \.self) { tag in
+                Button {
+                  Task { await homeViewModel.setTag(bookID: book.id, tag: tag) }
+                } label: {
+                  if book.tags.contains(tag) {
+                    Label(tag, systemImage: "checkmark")
+                  } else {
+                    Label(tag, systemImage: "tag")
+                  }
+                }
+              }
+
+              if !book.tags.isEmpty {
+                Divider()
+                Button(role: .destructive) {
+                  Task { await homeViewModel.setTag(bookID: book.id, tag: "") }
+                } label: {
+                  Label("Clear tag", systemImage: "xmark")
+                }
+              }
+
+              Divider()
               Button {
-                // Mock action
+                newTagName = ""
+                isShowingCreateTag = true
               } label: {
                 Label("Create tag", systemImage: "plus")
               }
@@ -111,7 +144,8 @@ struct BookCardView: View {
 
         Text("Progress: \(Int((book.progress * 100).rounded()))%")
           .font(.parkinsansBold(size: 13))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+          .padding(.top, 10)
 
       }
 
@@ -120,16 +154,55 @@ struct BookCardView: View {
     .padding(16)
     .background(
       RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color(.systemBackground))
+        .fill(backgroundColor)
         .overlay(
           RoundedRectangle(cornerRadius: 18, style: .continuous)
             .stroke(
-              colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.5),
+              colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5),
               lineWidth: 1)
         )
     )
     .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     .onTapGesture(perform: onOpen)
+    .alert("Create tag", isPresented: $isShowingCreateTag) {
+      TextField("Tag name", text: $newTagName)
+      Button("Cancel", role: .cancel) {
+        newTagName = ""
+      }
+      Button("Create") {
+        let name = newTagName
+        newTagName = ""
+        Task {
+          await homeViewModel.createTag(name: name)
+          let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+          if !trimmed.isEmpty {
+            await homeViewModel.setTag(bookID: book.id, tag: trimmed)
+          }
+        }
+      }
+    } message: {
+      Text("Create a new tag and assign it to this document.")
+    }
+    .sheet(isPresented: $isShowingEditDetails) {
+      let initialColor = BookCardColorStore.get(for: documentKey)
+      EditBookDetailsSheetView(
+        colorScheme: colorScheme,
+        availableTags: homeViewModel.availableTags,
+        initialTitle: book.title,
+        initialAuthor: book.author,
+        initialTag: book.tags.first ?? "",
+        initialColor: initialColor,
+        onCancel: { isShowingEditDetails = false },
+        onSave: { title, author, tag, color in
+          BookCardColorStore.set(color, for: documentKey)
+          isShowingEditDetails = false
+          Task {
+            await homeViewModel.updateBookDetails(
+              bookID: book.id, title: title, author: author, tag: tag)
+          }
+        }
+      )
+    }
   }
 
   /*   private var cover: some View {

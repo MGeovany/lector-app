@@ -92,6 +92,18 @@ final class APIClient {
     return try await send(request, decode: T.self)
   }
 
+  func postJSON<T: Decodable, Body: Encodable>(_ path: String, body: Body) async throws -> T {
+    var request = try makeRequest(path: path, method: "POST")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.httpBody = try JSONEncoder().encode(body)
+    return try await send(request, decode: T.self)
+  }
+
+  func postJSON<Body: Encodable>(_ path: String, body: Body) async throws {
+    _ = try await postJSON(path, body: body) as EmptyResponse
+  }
+
   func putJSON<T: Decodable, Body: Encodable>(_ path: String, body: Body) async throws -> T {
     var request = try makeRequest(path: path, method: "PUT")
     request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -102,6 +114,11 @@ final class APIClient {
 
   func putJSON<Body: Encodable>(_ path: String, body: Body) async throws {
     _ = try await putJSON(path, body: body) as EmptyResponse
+  }
+
+  func delete(_ path: String) async throws {
+    let request = try makeRequest(path: path, method: "DELETE")
+    _ = try await send(request, decode: EmptyResponse.self)
   }
 
   // MARK: - Internals

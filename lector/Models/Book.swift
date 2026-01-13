@@ -11,8 +11,8 @@ struct Book: Identifiable, Hashable {
   let id: UUID
   /// Backend document ID (`documents.id`). Useful for refresh and future calls (GET `/documents/{id}`).
   let remoteID: String?
-  let title: String
-  let author: String
+  var title: String
+  var author: String
   var pagesTotal: Int
   var currentPage: Int
   let sizeBytes: Int64

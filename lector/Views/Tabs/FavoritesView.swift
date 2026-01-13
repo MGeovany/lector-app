@@ -84,6 +84,7 @@ struct FavoritesView: View {
       }
       .padding(.bottom, 24)
     }
+    .environment(viewModel)
   }
 
   private var inlineEmptyState: some View {

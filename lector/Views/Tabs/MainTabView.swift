@@ -78,8 +78,8 @@ struct MainTabView: View {
       )
     }
     .frame(maxWidth: .infinity)
-    .padding(.top, 8)
-    .padding(.bottom, 6)
+    .padding(.vertical, 8)
+    .padding(.horizontal, 18)
     .background(
       Rectangle()
         .fill(colorScheme == .dark ? Color.black : Color(.systemBackground))
@@ -103,17 +103,18 @@ struct TabBarItemButton: View {
 
   var body: some View {
     Button(action: action) {
-      VStack(spacing: 2) {
+      VStack(spacing: 0) {
         TabBarIconView(icon: icon, isSelected: isSelected)
+          .padding(.vertical, 6)
 
         Text(title)
-          .font(.parkinsansBold(size: 10))
+          .font(.parkinsans(size: 12, weight: .light))
           .foregroundStyle(
             isSelected
               ? AppColors.tabSelected(for: colorScheme) : AppColors.tabUnselected(for: colorScheme))
       }
       .frame(maxWidth: .infinity)
-      .padding(.vertical, 6)
+
     }
     .buttonStyle(PlainButtonStyle())
     .accessibilityLabel(title)
@@ -135,7 +136,7 @@ struct TabBarIconView: View {
     switch icon {
     case .system(let name):
       Image(systemName: name)
-        .font(.parkinsans(size: 20))
+        .font(.parkinsans(size: 22, weight: .light))
         .foregroundStyle(foreground)
 
     case .asset(let name):
@@ -143,7 +144,7 @@ struct TabBarIconView: View {
         .renderingMode(.template)
         .resizable()
         .scaledToFit()
-        .frame(width: 22, height: 22)
+        .frame(width: 24, height: 24)
         .foregroundStyle(foreground)
 
     case .profileAvatar(let url):
@@ -154,11 +155,13 @@ struct TabBarIconView: View {
             image
               .resizable()
               .scaledToFill()
+              .frame(width: 24, height: 24)
           default:
             Image(systemName: "person.crop.circle")
               .resizable()
               .scaledToFit()
               .padding(3)
+              .frame(width: 24, height: 24)
           }
         }
         .frame(width: 24, height: 24)
@@ -183,6 +186,7 @@ struct TabBarIconView: View {
 
 #Preview {
   MainTabView()
+    .environment(AppSession())
     .environmentObject(PreferencesViewModel())
     .environmentObject(SubscriptionStore())
 }

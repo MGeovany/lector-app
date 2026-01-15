@@ -6,9 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-/* End PBXBuildFile section */
-
 /* Begin PBXFileReference section */
 		969C9A482F0C1A6E00EA0DB2 /* lector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lector.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0A1B2C3D4E5F67890123456 /* FontRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontRegistrar.swift; path = lector/Utils/FontRegistrar.swift; sourceTree = SOURCE_ROOT; };
@@ -271,6 +268,7 @@
 				DEVELOPMENT_TEAM = F5AC2P3U57;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save highlight images to your Photos library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -303,6 +301,7 @@
 				DEVELOPMENT_TEAM = F5AC2P3U57;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "Save highlight images to your Photos library.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

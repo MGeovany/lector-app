@@ -12,44 +12,16 @@ struct FavoritesHeaderView: View {
   let filteredFavorites: [Book]
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(alignment: .firstTextBaseline, spacing: 10) {
+    VStack(alignment: .center, spacing: 0) {
+      Text("My Favorites")
+        .font(.parkinsans(size: 20, weight: .regular))
+        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
 
-        Text("Favorites")
-          .font(.system(size: 32, weight: .bold))
-          .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
-
-        Spacer(minLength: 0)
-
-        Text("\(filteredFavorites.count)")
-          .font(.system(size: 14, weight: .bold))
-          .foregroundStyle(
-            colorScheme == .dark ? Color.white.opacity(0.65) : AppColors.matteBlack.opacity(0.65)
-          )
-          .padding(.horizontal, 10)
-          .padding(.vertical, 6)
-          .background(
-            Capsule(style: .continuous)
-              .fill(
-                colorScheme == .dark ? Color.white.opacity(0.10) : Color(.secondarySystemBackground)
-              )
-              .overlay(
-                Capsule(style: .continuous)
-                  .stroke(
-                    colorScheme == .dark
-                      ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5), lineWidth: 1)
-              )
-          )
-          .accessibilityLabel("\(filteredFavorites.count) favorites")
-      }
-
-      Text("Saved picks you can jump back into anytime.")
-        .font(.system(size: 14, weight: .semibold))
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
-        .fixedSize(horizontal: false, vertical: true)
+      Text("Books")
+        .font(.parkinsansMedium(size: 83))
+        .foregroundStyle(
+          colorScheme == .dark ? Color.white.opacity(0.75) : AppColors.matteBlack)
     }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.top, 8)
-    .padding(.bottom, 2)
+    .frame(maxWidth: .infinity, alignment: .center)
   }
 }

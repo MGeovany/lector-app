@@ -2,37 +2,64 @@ import SwiftUI
 
 struct BookCardView: View {
   @Environment(\.colorScheme) private var colorScheme
+  @Environment(HomeViewModel.self) private var homeViewModel
   let book: Book
   let onOpen: () -> Void
   let onToggleRead: () -> Void
   let onToggleFavorite: () -> Void
+  @State private var isShowingCreateTag: Bool = false
+  @State private var newTagName: String = ""
+  @State private var isShowingEditDetails: Bool = false
 
   var body: some View {
+    let documentKey = BookCardColorStore.documentKey(for: book)
+    let backgroundColor = BookCardColorStore.get(for: documentKey).color(for: colorScheme)
+
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .top, spacing: 14) {
-        cover
+        // cover
 
         VStack(alignment: .leading, spacing: 6) {
           Text(book.title.uppercased())
-            .font(.system(size: 22, weight: .bold))
+            .font(.parkinsansMedium(size: 42))
             .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : .primary)
             .lineLimit(2)
 
           Text(book.author)
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
+            .font(.parkinsansSemibold(size: 20))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.30) : .secondary)
+            .padding(.bottom, 10)
 
-          Text("\(book.pagesTotal) pages • \(formatBytes(book.sizeBytes))")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
+          /*   Label(
+            "\(book.lastOpenedDaysAgo)d ago • \(formatBytes(book.sizeBytes))",
+            systemImage: "calendar"
+          )
+          .font(.parkinsansSemibold(size: 13))
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+ */
+
+          HStack(spacing: 6) {
+
+            Label(
+              "\(book.lastOpenedDaysAgo)d ago | ",
+              systemImage: "calendar"
+            )
+            .font(.parkinsansSemibold(size: 13))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+
+            Label("\(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
+              .font(.parkinsansSemibold(size: 13))
+              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+
+          }
         }
 
         Spacer()
 
-        HStack(spacing: 6) {
+        HStack(spacing: 2) {
           Button(action: onToggleFavorite) {
             Image(systemName: book.isFavorite ? "heart.fill" : "heart")
-              .font(.system(size: 16, weight: .semibold))
+              .font(.parkinsansSemibold(size: 16))
               .foregroundStyle(
                 book.isFavorite
                   ? Color.red.opacity(0.90)
@@ -52,7 +79,7 @@ struct BookCardView: View {
             Divider()
 
             Button {
-              // Mock action
+              isShowingEditDetails = true
             } label: {
               Label("Edit details", systemImage: "square.and.pencil")
             }
@@ -60,12 +87,38 @@ struct BookCardView: View {
             Divider()
 
             Menu {
-              ForEach(book.tags, id: \.self) { tag in
-                Label(tag, systemImage: "tag")
+              if !book.tags.isEmpty {
+                ForEach(book.tags, id: \.self) { tag in
+                  Label(tag, systemImage: "tag")
+                }
+                Divider()
               }
 
+              ForEach(homeViewModel.availableTags, id: \.self) { tag in
+                Button {
+                  Task { await homeViewModel.setTag(bookID: book.id, tag: tag) }
+                } label: {
+                  if book.tags.contains(tag) {
+                    Label(tag, systemImage: "checkmark")
+                  } else {
+                    Label(tag, systemImage: "tag")
+                  }
+                }
+              }
+
+              if !book.tags.isEmpty {
+                Divider()
+                Button(role: .destructive) {
+                  Task { await homeViewModel.setTag(bookID: book.id, tag: "") }
+                } label: {
+                  Label("Clear tag", systemImage: "xmark")
+                }
+              }
+
+              Divider()
               Button {
-                // Mock action
+                newTagName = ""
+                isShowingCreateTag = true
               } label: {
                 Label("Create tag", systemImage: "plus")
               }
@@ -74,7 +127,7 @@ struct BookCardView: View {
             }
           } label: {
             Image(systemName: "ellipsis")
-              .font(.system(size: 18, weight: .semibold))
+              .font(.parkinsansSemibold(size: 18))
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.70) : .secondary)
               .frame(width: 36, height: 36)
               .contentShape(Rectangle())
@@ -83,19 +136,17 @@ struct BookCardView: View {
       }
 
       HStack(spacing: 14) {
-        Label("\(book.lastOpenedDaysAgo)d ago", systemImage: "calendar")
-          .font(.system(size: 13, weight: .semibold))
+        /*   Label("Page \(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
+            .font(.parkinsansSemibold(size: 13))
+            .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+        
+          Spacer() */
+
+        Text("Progress: \(Int((book.progress * 100).rounded()))%")
+          .font(.parkinsansBold(size: 13))
           .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+          .padding(.top, 10)
 
-        Label("Page \(book.currentPage) of \(book.pagesTotal)", systemImage: "book")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
-
-        Spacer()
-
-        Text("\(Int((book.progress * 100).rounded()))%")
-          .font(.system(size: 13, weight: .bold))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
       }
 
       ProgressBarView(progress: book.progress)
@@ -103,45 +154,84 @@ struct BookCardView: View {
     .padding(16)
     .background(
       RoundedRectangle(cornerRadius: 18, style: .continuous)
-        .fill(colorScheme == .dark ? Color.white.opacity(0.07) : Color(.systemBackground))
+        .fill(backgroundColor)
         .overlay(
           RoundedRectangle(cornerRadius: 18, style: .continuous)
             .stroke(
-              colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.5),
+              colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5),
               lineWidth: 1)
         )
     )
     .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     .onTapGesture(perform: onOpen)
-  }
-
-  private var cover: some View {
-    ZStack {
-      let lightTint = AppColors.matteBlack
-      RoundedRectangle(cornerRadius: 14, style: .continuous)
-        .fill(
-          LinearGradient(
-            colors: [
-              (colorScheme == .dark ? Color.white.opacity(0.18) : lightTint.opacity(0.18)),
-              (colorScheme == .dark ? Color.white.opacity(0.06) : lightTint.opacity(0.06)),
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-          )
-        )
-        .overlay(
-          RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .stroke(
-              colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5),
-              lineWidth: 1)
-        )
-
-      Text(initials(from: book.title))
-        .font(.system(size: 16, weight: .bold))
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
+    .alert("Create tag", isPresented: $isShowingCreateTag) {
+      TextField("Tag name", text: $newTagName)
+      Button("Cancel", role: .cancel) {
+        newTagName = ""
+      }
+      Button("Create") {
+        let name = newTagName
+        newTagName = ""
+        Task {
+          await homeViewModel.createTag(name: name)
+          let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+          if !trimmed.isEmpty {
+            await homeViewModel.setTag(bookID: book.id, tag: trimmed)
+          }
+        }
+      }
+    } message: {
+      Text("Create a new tag and assign it to this document.")
     }
-    .frame(width: 56, height: 72)
+    .sheet(isPresented: $isShowingEditDetails) {
+      let initialColor = BookCardColorStore.get(for: documentKey)
+      EditBookDetailsSheetView(
+        colorScheme: colorScheme,
+        availableTags: homeViewModel.availableTags,
+        initialTitle: book.title,
+        initialAuthor: book.author,
+        initialTag: book.tags.first ?? "",
+        initialColor: initialColor,
+        onCancel: { isShowingEditDetails = false },
+        onSave: { title, author, tag, color in
+          BookCardColorStore.set(color, for: documentKey)
+          isShowingEditDetails = false
+          Task {
+            await homeViewModel.updateBookDetails(
+              bookID: book.id, title: title, author: author, tag: tag)
+          }
+        }
+      )
+    }
   }
+
+  /*   private var cover: some View {
+      ZStack {
+        let lightTint = AppColors.matteBlack
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .fill(
+            LinearGradient(
+              colors: [
+                (colorScheme == .dark ? Color.white.opacity(0.18) : lightTint.opacity(0.18)),
+                (colorScheme == .dark ? Color.white.opacity(0.06) : lightTint.opacity(0.06)),
+              ],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            )
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+              .stroke(
+                colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.5),
+                lineWidth: 1)
+          )
+  
+        Text(initials(from: book.title))
+          .font(.parkinsansBold(size: 16))
+          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.85) : .primary)
+      }
+      .frame(width: 56, height: 72)
+    } */
 
   private func initials(from title: String) -> String {
     let parts =
@@ -160,24 +250,4 @@ struct BookCardView: View {
     formatter.isAdaptive = true
     return formatter.string(fromByteCount: bytes)
   }
-}
-
-#Preview {
-  BookCardView(
-    book: Book(
-      title: "Noches Blancas",
-      author: "J.A.C.",
-      pagesTotal: 32,
-      currentPage: 14,
-      sizeBytes: 157_400,
-      lastOpenedDaysAgo: 14,
-      isRead: false,
-      isFavorite: true,
-      tags: ["Book"]
-    ),
-    onOpen: {},
-    onToggleRead: {},
-    onToggleFavorite: {}
-  )
-  .padding()
 }

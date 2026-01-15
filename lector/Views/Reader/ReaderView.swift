@@ -173,9 +173,15 @@ struct ReaderView: View {
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
             .padding(10)
+            .background(
+              Circle()
+                .fill(preferences.theme.surfaceText.opacity(showSearch ? 0.12 : 0.0))
+            )
+            .scaleEffect(showSearch ? 1.1 : 1.0)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Search")
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showSearch)
 
         Button {
           showControls = true
@@ -210,6 +216,7 @@ struct ReaderView: View {
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
             .padding(10)
+            .symbolEffect(.bounce, value: preferences.theme)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Cycle theme")
@@ -254,16 +261,20 @@ struct ReaderView: View {
               HStack(spacing: 10) {
                 Image(systemName: "magnifyingglass")
                   .foregroundStyle(preferences.theme.surfaceSecondaryText)
+                  .symbolEffect(.pulse, value: !searchQuery.isEmpty)
                 TextField("Search in book", text: $searchQuery)
                   .textInputAutocapitalization(.never)
                   .disableAutocorrection(true)
                   .foregroundStyle(preferences.theme.surfaceText)
                 if !searchQuery.isEmpty {
                   Button {
-                    searchQuery = ""
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                      searchQuery = ""
+                    }
                   } label: {
                     Image(systemName: "xmark.circle.fill")
                       .foregroundStyle(preferences.theme.surfaceSecondaryText)
+                      .transition(.scale.combined(with: .opacity))
                   }
                   .buttonStyle(.plain)
                 }
@@ -278,10 +289,17 @@ struct ReaderView: View {
               )
               .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                  .stroke(preferences.theme.surfaceText.opacity(0.10), lineWidth: 1)
+                  .stroke(
+                    !searchQuery.isEmpty
+                      ? preferences.theme.surfaceText.opacity(0.20)
+                      : preferences.theme.surfaceText.opacity(0.10),
+                    lineWidth: !searchQuery.isEmpty ? 1.5 : 1
+                  )
               )
               .padding(.horizontal, 18)
               .padding(.top, 12)
+              .transition(.move(edge: .top).combined(with: .opacity))
+              .animation(.spring(response: 0.3, dampingFraction: 0.7), value: searchQuery.isEmpty)
             }
 
             if viewModel.isLoading {
@@ -467,6 +485,11 @@ struct ReaderView: View {
       .buttonStyle(.plain)
       .disabled(viewModel.currentIndex <= 0)
       .accessibilityLabel("Previous page")
+      .simultaneousGesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { _ in }
+          .onEnded { _ in }
+      )
 
       Spacer(minLength: 0)
 
@@ -474,6 +497,7 @@ struct ReaderView: View {
         Text("\(max(1, viewModel.currentIndex + 1))/\(max(1, viewModel.pages.count))")
           .font(.system(size: 14, weight: .bold))
           .foregroundStyle(preferences.theme.surfaceText.opacity(0.90))
+          .contentTransition(.numericText())
       }
       .padding(.horizontal, 18)
       .padding(.vertical, 10)
@@ -487,6 +511,7 @@ struct ReaderView: View {
       )
       .accessibilityLabel(
         "Page \(max(1, viewModel.currentIndex + 1)) of \(max(1, viewModel.pages.count))")
+      .animation(.spring(response: 0.3, dampingFraction: 0.7), value: viewModel.currentIndex)
 
       Spacer(minLength: 0)
 
@@ -514,6 +539,11 @@ struct ReaderView: View {
       .buttonStyle(.plain)
       .disabled(viewModel.currentIndex >= max(0, viewModel.pages.count - 1))
       .accessibilityLabel("Next page")
+      .simultaneousGesture(
+        DragGesture(minimumDistance: 0)
+          .onChanged { _ in }
+          .onEnded { _ in }
+      )
     }
     .padding(.horizontal, 18)
     .padding(.vertical, 14)

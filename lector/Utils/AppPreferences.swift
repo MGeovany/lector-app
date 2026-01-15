@@ -31,7 +31,7 @@ enum AppLanguage: String, CaseIterable, Identifiable {
   var title: String {
     switch self {
     case .english: return "English"
-    case .spanish: return "Spanish"
+    case .spanish: return "Spanish (Soon)"
     }
   }
 }

@@ -20,10 +20,10 @@ struct lectorApp: App {
   var body: some Scene {
     WindowGroup {
       ContentView()
-      // Base typography for the whole app (views can override with `.font(...)`).
-      .environment(\.font, .custom("Parkinsans-Regular", size: 16))
-      .environmentObject(preferences)
-      .environmentObject(subscription)
+        // Base typography for the whole app (views can override with `.font(...)`).
+        .environment(\.font, .custom("Parkinsans-Regular", size: 16))
+        .environmentObject(preferences)
+        .environmentObject(subscription)
     }
   }
 }

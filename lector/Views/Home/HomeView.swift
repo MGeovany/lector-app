@@ -7,6 +7,7 @@ struct HomeView: View {
   @State private var addViewModel: AddViewModel = AddViewModel()
   @State private var showFilePicker: Bool = false
   @State private var pickedURL: URL?
+  @State private var toast: UploadToastData?
 
   init(viewModel: HomeViewModel? = nil) {
     _viewModel = State(initialValue: viewModel ?? HomeViewModel())
@@ -68,8 +69,13 @@ struct HomeView: View {
       .navigationDestination(item: $viewModel.selectedBook) { book in
         ReaderView(
           book: book,
-          onProgressChange: { page, total in
-            viewModel.updateBookProgress(bookID: book.id, page: page, totalPages: total)
+          onProgressChange: { page, total, progressOverride in
+            viewModel.updateBookProgress(
+              bookID: book.id,
+              page: page,
+              totalPages: total,
+              progressOverride: progressOverride
+            )
           }
         )
       }
@@ -122,21 +128,35 @@ struct HomeView: View {
         .padding(.bottom, 86)
       }
     }
-    .alert(
-      "Upload",
-      isPresented: Binding(
-        get: { addViewModel.alertMessage != nil || addViewModel.didUploadSuccessfully },
-        set: { newValue in
-          if !newValue {
-            addViewModel.alertMessage = nil
-            addViewModel.didUploadSuccessfully = false
-          }
-        }
-      )
-    ) {
-      Button("OK", role: .cancel) {}
-    } message: {
-      Text(addViewModel.alertMessage ?? (addViewModel.didUploadSuccessfully ? "Uploaded." : ""))
+    .overlay(alignment: .bottom) {
+      if let toast {
+        UploadToastView(toast: toast)
+          .padding(.bottom, 86)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+    .onChange(of: addViewModel.didUploadSuccessfully) { didSucceed in
+      guard didSucceed else { return }
+      withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+        toast = UploadToastData(kind: .success, message: "Uploaded.")
+      }
+      addViewModel.didUploadSuccessfully = false
+      Task { @MainActor in
+        try? await Task.sleep(nanoseconds: 2_000_000_000)
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
+      }
+    }
+    .onChange(of: addViewModel.alertMessage) { msg in
+      let trimmed = (msg ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      guard !trimmed.isEmpty else { return }
+      withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+        toast = UploadToastData(kind: .error, message: trimmed)
+      }
+      addViewModel.alertMessage = nil
+      Task { @MainActor in
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
+      }
     }
   }
 
@@ -165,6 +185,71 @@ struct HomeView: View {
     }
   }
 
+}
+
+// MARK: - Upload Toast (non-blocking)
+
+private struct UploadToastData: Equatable {
+  enum Kind: Equatable {
+    case success
+    case error
+
+    var iconName: String {
+      switch self {
+      case .success: return "checkmark.circle.fill"
+      case .error: return "xmark.octagon.fill"
+      }
+    }
+
+    var iconColor: Color {
+      switch self {
+      case .success: return .green
+      case .error: return .red
+      }
+    }
+  }
+
+  let kind: Kind
+  let message: String
+}
+
+private struct UploadToastView: View {
+  let toast: UploadToastData
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    HStack(spacing: 10) {
+      Image(systemName: toast.kind.iconName)
+        .font(.system(size: 15, weight: .semibold))
+        .foregroundStyle(toast.kind.iconColor)
+
+      Text(toast.message)
+        .font(.system(size: 13, weight: .semibold))
+        .foregroundStyle(textColor)
+        .lineLimit(2)
+        .multilineTextAlignment(.leading)
+
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 10)
+    .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+    .overlay(
+      Capsule(style: .continuous)
+        .stroke(borderColor, lineWidth: 1)
+    )
+    .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.35 : 0.10), radius: 10, y: 6)
+    .padding(.horizontal, 18)
+    .accessibilityLabel(toast.message)
+  }
+
+  private var textColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.90) : AppColors.matteBlack.opacity(0.90)
+  }
+
+  private var borderColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.12) : Color(.separator).opacity(0.35)
+  }
 }
 
 // MARK: - Skeletons (Home)

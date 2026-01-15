@@ -69,6 +69,20 @@ struct PreferencesView: View {
                 )
               }
 
+              PreferenceSectionCard(
+                icon: "scroll",
+                title: "Reading",
+                subtitle:
+                  "This will enable continuous scroll for short documents."
+              ) {
+                Toggle(
+                  "Continuous scroll",
+                  isOn: $viewModel.continuousScrollForShortDocs
+                )
+                .font(.parkinsansSemibold(size: 13))
+                .tint(preferencesAccent)
+              }
+
               Button(role: .destructive, action: viewModel.restoreDefaults) {
                 HStack(spacing: 8) {
                   Image(systemName: "arrow.counterclockwise")
@@ -101,17 +115,20 @@ struct PreferencesView: View {
         }
       }
       .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .topBarTrailing) {
-          Button(action: viewModel.save) {
-            HStack(spacing: 8) {
-              Image(systemName: "checkmark.circle.fill")
-              Text("Save")
-            }
-            .font(.parkinsansSemibold(size: 14))
-          }
-          .disabled(!viewModel.hasChanges)
-        }
+      .onChange(of: viewModel.theme) { _, _ in
+        viewModel.save()
+      }
+      .onChange(of: viewModel.font) { _, _ in
+        viewModel.save()
+      }
+      .onChange(of: viewModel.fontSize) { _, _ in
+        viewModel.save()
+      }
+      .onChange(of: viewModel.lineSpacing) { _, _ in
+        viewModel.save()
+      }
+      .onChange(of: viewModel.continuousScrollForShortDocs) { _, _ in
+        viewModel.save()
       }
     }
   }
@@ -148,6 +165,11 @@ struct PreferencesView: View {
     }
   }
 
+  private var preferencesAccent: Color {
+    // Reuse reading accent to keep the UI consistent with the reader.
+    viewModel.theme.accent
+  }
+
   // MVVM: persistence + dirty-check is handled by `PreferencesViewModel`.
 }
 
@@ -177,7 +199,7 @@ private struct PreferenceSectionCard<Content: View>: View {
 
       if !subtitle.isEmpty {
         Text(subtitle)
-          .font(.parkinsansSemibold(size: 12))
+          .font(.parkinsans(size: 12, weight: .regular))
           .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
           .fixedSize(horizontal: false, vertical: true)
           .padding(.top, -6)

@@ -34,8 +34,13 @@ struct FavoritesView: View {
       .navigationDestination(item: $selectedBook) { book in
         ReaderView(
           book: book,
-          onProgressChange: { page, total in
-            viewModel.updateBookProgress(bookID: book.id, page: page, totalPages: total)
+          onProgressChange: { page, total, progressOverride in
+            viewModel.updateBookProgress(
+              bookID: book.id,
+              page: page,
+              totalPages: total,
+              progressOverride: progressOverride
+            )
           }
         )
       }

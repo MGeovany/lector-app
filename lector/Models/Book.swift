@@ -15,6 +15,8 @@ struct Book: Identifiable, Hashable {
   var author: String
   var pagesTotal: Int
   var currentPage: Int
+  /// Optional backend progress (0..1). Used for continuous scroll resume/progress.
+  var readingProgress: Double?
   let sizeBytes: Int64
   let lastOpenedDaysAgo: Int
   var isRead: Bool
@@ -28,6 +30,7 @@ struct Book: Identifiable, Hashable {
     author: String,
     pagesTotal: Int,
     currentPage: Int,
+    readingProgress: Double? = nil,
     sizeBytes: Int64,
     lastOpenedDaysAgo: Int,
     isRead: Bool,
@@ -40,6 +43,7 @@ struct Book: Identifiable, Hashable {
     self.author = author
     self.pagesTotal = pagesTotal
     self.currentPage = currentPage
+    self.readingProgress = readingProgress
     self.sizeBytes = sizeBytes
     self.lastOpenedDaysAgo = lastOpenedDaysAgo
     self.isRead = isRead
@@ -48,6 +52,7 @@ struct Book: Identifiable, Hashable {
   }
 
   var progress: Double {
+    if let readingProgress { return min(1.0, max(0.0, readingProgress)) }
     guard pagesTotal > 0 else { return 0 }
     return min(1.0, max(0.0, Double(currentPage) / Double(pagesTotal)))
   }

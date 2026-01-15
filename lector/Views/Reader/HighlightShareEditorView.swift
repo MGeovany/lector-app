@@ -292,9 +292,9 @@ private struct HighlightShareCanvasView: View {
   var body: some View {
     GeometryReader { geo in
       ZStack {
-        // Export style: "framed" look (like Medium/Spotify shares) on a clean white canvas.
-        // This avoids the content feeling stretched when Instagram scales the story.
-        Color.white
+        // Export style: keep the same layout, but match the current reading theme
+        // (day/night/amber) instead of always exporting on a white canvas.
+        theme.surfaceBackground
 
         let tuned = ShareTuning.make(quote: draft.quote, baseFontSize: fontSize)
         // Keep a narrower, more "readable column" width (what you marked in red),
@@ -314,7 +314,7 @@ private struct HighlightShareCanvasView: View {
           metadataFontSize: tuned.metadataFontSize,
           maxQuoteLines: tuned.maxQuoteLines,
           maxWords: tuned.maxWords,
-          palette: .export
+          palette: .export(for: theme)
         )
         .frame(width: cardWidth)
         .shadow(color: Color.black.opacity(0.18), radius: 28, x: 0, y: 16)
@@ -381,13 +381,19 @@ private struct HighlightCardPalette: Equatable {
   let bar: Color
   let border: Color
 
-  static let export = HighlightCardPalette(
-    cardBackground: Color.white,
-    primary: Color.black,
-    secondary: Color.black.opacity(0.65),
-    bar: Color.black,
-    border: Color.black.opacity(0.12)
-  )
+  static func export(for theme: ReadingTheme) -> HighlightCardPalette {
+    // Ensure exports always match the selected reading theme.
+    // Use theme-aware colors for background/text, and use the theme accent for the bar.
+    let primary = theme.surfaceText
+    let border = primary.opacity(theme == .night ? 0.14 : 0.10)
+    return HighlightCardPalette(
+      cardBackground: theme.surfaceBackground,
+      primary: primary,
+      secondary: theme.surfaceSecondaryText,
+      bar: theme.accent,
+      border: border
+    )
+  }
 }
 
 private struct HighlightCardView: View {

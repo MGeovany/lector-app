@@ -194,18 +194,25 @@ struct ReaderView: View {
         .accessibilityLabel("Reading controls")
 
         Button {
-          // Quick toggle: day <-> night (amber stays selectable in controls).
+          // Quick toggle: cycle day -> night -> amber (also selectable in controls).
           withAnimation(.spring(response: 0.25, dampingFraction: 0.9)) {
-            preferences.theme = (preferences.theme == .night) ? .day : .night
+            switch preferences.theme {
+            case .day:
+              preferences.theme = .night
+            case .night:
+              preferences.theme = .amber
+            case .amber:
+              preferences.theme = .day
+            }
           }
         } label: {
-          Image(systemName: preferences.theme == .night ? "sun.max.fill" : "moon.stars.fill")
+          Image(systemName: preferences.theme.icon)
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
             .padding(10)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Toggle theme")
+        .accessibilityLabel("Cycle theme")
       }
     }
     .padding(.horizontal, 18)

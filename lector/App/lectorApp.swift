@@ -21,33 +21,41 @@ struct lectorApp: App {
     FontRegistrar.registerParkinsansIfNeeded()
 
     #if canImport(Sentry)
-      SentrySDK.start { options in
-        options.dsn =
-          "https://d41087119879e606dd86848f8f1d864e@o4510713078218752.ingest.us.sentry.io/4510713082413056"
+      let dsn =
+        (Bundle.main.object(forInfoDictionaryKey: "SENTRY_DSN") as? String)?
+        .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        #if DEBUG
-          options.environment = "debug"
-          options.debug = true
-        #else
-          options.environment = "release"
-          options.debug = false
-        #endif
+      // If the build setting isn't provided, the Info.plist may contain the literal
+      // "$(SENTRY_DSN)". Treat that as "missing" and skip initializing Sentry.
+      if !dsn.isEmpty, !dsn.hasPrefix("$(") {
+        SentrySDK.start { options in
+          options.dsn = dsn
 
-        let short =
-          (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String) ?? "0"
-        let build =
-          (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "0"
-        let bundleID = Bundle.main.bundleIdentifier ?? "lector"
-        options.releaseName = "\(bundleID)@\(short)+\(build)"
+          #if DEBUG
+            options.environment = "debug"
+            options.debug = true
+          #else
+            options.environment = "release"
+            options.debug = false
+          #endif
 
-        // Focus on crashes/errors; keep performance sampling off by default.
-        options.tracesSampleRate = 0.0
-        options.attachStacktrace = true
+          let short =
+            (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
+            ?? "0"
+          let build =
+            (Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String) ?? "0"
+          let bundleID = Bundle.main.bundleIdentifier ?? "lector"
+          options.releaseName = "\(bundleID)@\(short)+\(build)"
+
+          // Focus on crashes/errors; keep performance sampling off by default.
+          options.tracesSampleRate = 0.0
+          options.attachStacktrace = true
+        }
+
+        let crumb = Breadcrumb(level: .info, category: "app")
+        crumb.message = "app_launched"
+        SentrySDK.addBreadcrumb(crumb)
       }
-
-      let crumb = Breadcrumb(level: .info, category: "app")
-      crumb.message = "app_launched"
-      SentrySDK.addBreadcrumb(crumb)
     #endif
   }
 

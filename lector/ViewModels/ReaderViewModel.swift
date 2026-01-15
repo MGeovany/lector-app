@@ -142,27 +142,3 @@ final class ReaderViewModel: ObservableObject {
     return out.joined(separator: "\n\n").trimmingCharacters(in: .whitespacesAndNewlines)
   }
 }
-
-// Local shim to avoid hard dependency on telemetry in environments where Sentry isn't resolved.
-// (When Sentry is installed in Xcode, we capture richer breadcrumbs elsewhere.)
-private enum Telemetry {
-  static func breadcrumb(
-    _ category: String,
-    message: String? = nil,
-    data: [String: Any]? = nil
-  ) {
-    _ = category
-    _ = message
-    _ = data
-  }
-
-  static func capture(
-    _ error: Error,
-    category: String,
-    data: [String: Any]? = nil
-  ) {
-    _ = error
-    _ = category
-    _ = data
-  }
-}

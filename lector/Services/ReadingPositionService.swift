@@ -2,6 +2,7 @@ import Foundation
 
 protocol ReadingPositionServicing {
   func getAllReadingPositions() async throws -> [String: RemoteReadingPosition]
+  func getReadingPosition(documentID: String) async throws -> RemoteReadingPosition
   func updateReadingPosition(documentID: String, pageNumber: Int, progress: Double) async throws
 }
 
@@ -10,6 +11,10 @@ final class GoReadingPositionService: ReadingPositionServicing {
 
   init(api: APIClient = APIClient()) {
     self.api = api
+  }
+
+  func getReadingPosition(documentID: String) async throws -> RemoteReadingPosition {
+    try await api.get("preferences/reading-position/\(documentID)")
   }
 
   func updateReadingPosition(documentID: String, pageNumber: Int, progress: Double) async throws {
@@ -33,4 +38,3 @@ final class GoReadingPositionService: ReadingPositionServicing {
     try await api.get("preferences/reading-positions")
   }
 }
-

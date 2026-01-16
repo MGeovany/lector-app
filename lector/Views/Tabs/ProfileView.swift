@@ -10,16 +10,22 @@ import SwiftUI
 struct ProfileView: View {
   @EnvironmentObject private var subscription: SubscriptionStore
   @Environment(AppSession.self) private var session
+  @Environment(\.openURL) private var openURL
   @State private var showPremiumSheet: Bool = false
   @State private var showDeleteAccountConfirm: Bool = false
   @State private var showLogoutConfirm: Bool = false
   @State private var showAccountDeletedAlert: Bool = false
   @State private var showLoggedOutAlert: Bool = false
-  @State private var showSubscriptionErrorAlert: Bool = false
+  @State private var usedBytes: Int64 = 0
+  @State private var maxBytesOverride: Int64? = nil
+  @State private var isLoadingStorageUsage: Bool = false
+  private let documentsService: DocumentsServicing = GoDocumentsService()
+  private let api: APIClient = APIClient()
 
   @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english
     .rawValue
   @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
+  @AppStorage(AppPreferenceKeys.accountDisabled) private var accountDisabled: Bool = false
 
   var body: some View {
 
@@ -66,50 +72,23 @@ struct ProfileView: View {
                 .foregroundStyle(.secondary)
             }
           }
-
-          Button {
-            Task {
-              await subscription.showManageSubscriptions()
-              if subscription.lastErrorMessage != nil {
-                showSubscriptionErrorAlert = true
-              }
-            }
-          } label: {
-            SettingsRowView(
-              icon: "creditcard",
-              title: "Manage subscription",
-              trailingText: subscription.isPremium ? "Cancel" : nil,
-              showsChevron: true
-            )
-          }
-          .buttonStyle(.plain)
-
-          Text("Cancel or change your plan in the App Store.")
-            .font(.footnote)
-            .foregroundStyle(.secondary)
         }
 
         if subscription.isFounder {
           Section("Founder") {
-            VStack(alignment: .leading, spacing: 6) {
-              Text("Lector Founder")
-                .font(.system(size: 16, weight: .semibold))
-              Text(
-                "Thanks for supporting Lector early. You’ll get early access to new features as they ship."
-              )
-              .font(.system(size: 13, weight: .regular))
-              .foregroundStyle(.secondary)
-            }
-            .padding(.vertical, 4)
+            FounderHighlightCard(displayName: founderDisplayName)
+              .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
+              .listRowBackground(Color.clear)
           }
         }
 
         Section("Storage") {
           StorageUsageCardView(
-            usedBytes: 0,
-            maxBytes: subscription.maxStorageBytes,
+            usedBytes: usedBytes,
+            maxBytes: maxBytesOverride ?? subscription.maxStorageBytes,
             isPremium: subscription.isPremium,
-            onUpgradeTapped: subscription.isPremium ? nil : { showPremiumSheet = true }
+            onUpgradeTapped: subscription.isPremium ? nil : { showPremiumSheet = true },
+            onMoreSpaceTapped: subscription.isPremium ? { requestMoreStorageByEmail() } : nil
           )
           .listRowInsets(EdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0))
           .listRowBackground(Color.clear)
@@ -204,23 +183,30 @@ struct ProfileView: View {
         PremiumUpsellSheetView()
           .environmentObject(subscription)
       }
-      .task { await subscription.refreshFromStoreKit() }
-      .alert("Subscription", isPresented: $showSubscriptionErrorAlert) {
-        Button("OK", role: .cancel) {}
-      } message: {
-        Text(subscription.lastErrorMessage ?? "Something went wrong.")
+      .task {
+        // In Xcode Previews we inject a fake SubscriptionStore (e.g. proYearly).
+        // Avoid overriding it by syncing real StoreKit entitlements.
+        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+        guard !isPreview else { return }
+        await subscription.refreshFromStoreKit()
+      }
+      .task(id: session.isAuthenticated) {
+        await loadStorageUsage()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .documentsDidChange)) { _ in
+        Task { await loadStorageUsage() }
       }
       .overlay {
         if showDeleteAccountConfirm {
           CenteredConfirmationModal(
             title: "Delete account?",
-            message: "This is a mock action for now. It will clear local app data on this device.",
-            confirmTitle: "Delete Account",
+            message:
+              "Your account will be temporarily disabled while we process your request. All data will be permanently deleted, and you’ll receive an email confirmation once completed.",
+            confirmTitle: "Request deletion",
             isDestructive: true,
             onConfirm: {
               showDeleteAccountConfirm = false
-              deleteAccountLocally()
-              showAccountDeletedAlert = true
+              requestAccountDeletion()
             },
             onCancel: { showDeleteAccountConfirm = false }
           )
@@ -269,6 +255,127 @@ struct ProfileView: View {
       ?? URL(fileURLWithPath: "/")
   }
 
+  private func loadStorageUsage() async {
+    guard session.isAuthenticated else {
+      usedBytes = 0
+      return
+    }
+    let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
+    guard !userID.isEmpty else {
+      usedBytes = 0
+      return
+    }
+
+    isLoadingStorageUsage = true
+    defer { isLoadingStorageUsage = false }
+
+    // Prefer backend-provided usage+limit (keeps app in sync with server enforcement).
+    struct StorageUsageResponse: Decodable {
+      let used_bytes: Int64
+      let limit_bytes: Int64
+      let percent: Double
+    }
+
+    if let resp: StorageUsageResponse = try? await api.get("storage/usage") {
+      usedBytes = max(0, resp.used_bytes)
+      maxBytesOverride = resp.limit_bytes > 0 ? resp.limit_bytes : nil
+      return
+    }
+
+    // Fallback: compute usage client-side.
+    do {
+      let docs = try await documentsService.getDocumentsByUserID(userID)
+      usedBytes = docs.reduce(Int64(0)) { $0 + ($1.metadata.fileSize ?? 0) }
+    } catch {
+      // Non-blocking; keep last known value.
+    }
+  }
+
+  private func requestAccountDeletion() {
+    Task {
+      do {
+        // First, call backend to mark account_disabled = true in DB (server-side blocking).
+        let profileService = GoUserProfileService()
+        try await profileService.requestAccountDeletion()
+
+        // Then disable access on this device (local blocking).
+        accountDisabled = true
+        subscription.downgradeToFree()
+
+        // Prepare an email request to support (user will send via Mail).
+        if let url = accountDeletionRequestEmailURL() {
+          openURL(url)
+        }
+
+        // Sign out to ensure no further access with cached tokens.
+        session.signOut()
+      } catch {
+        // If backend call fails, still block locally but show error.
+        accountDisabled = true
+        subscription.downgradeToFree()
+        session.signOut()
+        // TODO: Show error alert to user (backend call failed, but local blocking applied)
+      }
+    }
+  }
+
+  private func accountDeletionRequestEmailURL() -> URL? {
+    let email = "marlon.castro@thefndrs.com"
+    let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
+    let userEmail = session.profile?.email ?? ""
+    let subject = "Account Deletion Request"
+    let body =
+      """
+      Hi,
+
+      Please delete my Lector account and all associated data.
+
+      User ID: \(userID)
+      Email: \(userEmail)
+
+      Thanks,
+      """
+    let encodedSubject =
+      subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+    let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? body
+    return URL(string: "mailto:\(email)?subject=\(encodedSubject)&body=\(encodedBody)")
+      ?? URL(string: "mailto:\(email)")
+  }
+
+  private func requestMoreStorageByEmail() {
+    if let url = moreStorageRequestEmailURL() {
+      openURL(url)
+    }
+  }
+
+  private func moreStorageRequestEmailURL() -> URL? {
+    let email = "marlon.castro@thefndrs.com"
+    let userID = KeychainStore.getString(account: KeychainKeys.userID) ?? ""
+    let userEmail = session.profile?.email ?? ""
+    let subject = "More storage request"
+    let body =
+      """
+      Hi Marlon,
+
+      I’d like to request more storage.
+
+      Plan: \(planTitle)
+      Current usage: \(ByteCountFormatter.string(fromByteCount: usedBytes, countStyle: .file))
+      Current limit: \(subscription.maxStorageText)
+
+      User ID: \(userID)
+      Email: \(userEmail)
+
+      Thanks,
+      """
+
+    let encodedSubject =
+      subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? subject
+    let encodedBody = body.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? body
+    return URL(string: "mailto:\(email)?subject=\(encodedSubject)&body=\(encodedBody)")
+      ?? URL(string: "mailto:\(email)")
+  }
+
   private func deleteAccountLocally() {
     // Ensure the UI immediately reflects free-tier state (SubscriptionStore caches isPremium in memory).
     subscription.downgradeToFree()
@@ -314,11 +421,238 @@ struct ProfileView: View {
     f.timeStyle = .none
     return f.string(from: date)
   }
+
+  private var founderDisplayName: String? {
+    let raw = session.profile?.displayName ?? ""
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? nil : trimmed
+  }
 }
 
-#Preview {
-  let previewSubscription = SubscriptionStore(initialPlan: .proYearly, persistToDefaults: false)
-  ProfileView()
-    .environment(AppSession())
-    .environmentObject(previewSubscription)
+// MARK: - Founder highlight card (animated + benefits)
+
+private struct FounderHighlightCard: View {
+  let displayName: String?
+  @State private var shimmerPhase: CGFloat = -0.8
+
+  private let gold = Color(red: 1.00, green: 0.74, blue: 0.22)
+  private let amber = Color(red: 1.00, green: 0.42, blue: 0.14)
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 18) {
+      header
+      benefits
+      footer
+    }
+    .padding(16)
+    .background(background)
+    .overlay(shimmer)
+    .frame(maxWidth: .infinity, minHeight: 220)
+    .onAppear {
+      withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+        shimmerPhase = 1.2
+      }
+    }
+  }
+
+  private var header: some View {
+    HStack(spacing: 12) {
+      seal
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text("Founder")
+          .font(.parkinsansBold(size: 18))
+          .foregroundStyle(.white.opacity(0.96))
+        Text("Lifetime perks for early supporters.")
+          .font(.parkinsans(size: 12, weight: .regular))
+          .foregroundStyle(.white.opacity(0.72))
+      }
+      .padding(.bottom, 12)
+
+    }
+  }
+
+  private var benefits: some View {
+    VStack(spacing: 20) {
+      BenefitRow(
+        icon: "externaldrive.fill",
+        title: "\(MAX_STORAGE_PRO_GB)GB storage",
+        subtitle: "Keep your full library synced.",
+        tint: gold
+      )
+      BenefitRow(
+        icon: "bolt.fill",
+        title: "Early access",
+        subtitle: "Try new features before everyone else.",
+        tint: gold
+      )
+      BenefitRow(
+        icon: "person.crop.circle.badge.checkmark",
+        title: "Founder identity",
+        subtitle: "A special badge that stands out.",
+        tint: gold
+      )
+    }
+    .padding(.bottom, 12)
+
+  }
+
+  private var footer: some View {
+    let name = (displayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let line =
+      name.isEmpty ? "Thanks for supporting Lector early." : "Thanks, \(name) — you’re a Founder."
+
+    return HStack(spacing: 8) {
+      Image(systemName: "sparkles")
+        .font(.system(size: 12, weight: .heavy))
+        .foregroundStyle(gold.opacity(0.95))
+      Text(line)
+        .font(.parkinsansSemibold(size: 12))
+        .foregroundStyle(.white.opacity(0.82))
+        .lineLimit(2)
+      Spacer(minLength: 0)
+    }
+    .padding(.top, 8)
+    .padding(.bottom, 4)
+  }
+
+  private var background: some View {
+    RoundedRectangle(cornerRadius: 20, style: .continuous)
+      .fill(
+        LinearGradient(
+          colors: [
+            Color(red: 0.06, green: 0.06, blue: 0.07),
+            Color(red: 0.14, green: 0.10, blue: 0.08),
+            Color(red: 0.20, green: 0.12, blue: 0.08),
+          ],
+          startPoint: .topLeading,
+          endPoint: .bottomTrailing
+        )
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: 20, style: .continuous)
+          .stroke(
+            LinearGradient(
+              colors: [gold.opacity(0.35), Color.white.opacity(0.10), amber.opacity(0.25)],
+              startPoint: .topLeading,
+              endPoint: .bottomTrailing
+            ),
+            lineWidth: 1
+          )
+      )
+      .shadow(color: gold.opacity(0.22), radius: 22, y: 12)
+  }
+
+  private var shimmer: some View {
+    GeometryReader { geo in
+      let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+      shape
+        .fill(Color.clear)
+        .overlay(
+          LinearGradient(
+            colors: [
+              Color.white.opacity(0.00),
+              Color.white.opacity(0.35),
+              Color.white.opacity(0.00),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+          )
+          .rotationEffect(.degrees(18))
+          // Give the gradient plenty of height so it never “cuts off”.
+          .frame(width: geo.size.width * 0.75, height: geo.size.height * 2)
+          .offset(x: geo.size.width * shimmerPhase)
+          .blendMode(.screen)
+          .opacity(0.14)
+        )
+        .clipShape(shape)
+        .allowsHitTesting(false)
+    }
+  }
+
+  private var seal: some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .fill(
+          LinearGradient(colors: [gold, amber], startPoint: .topLeading, endPoint: .bottomTrailing)
+        )
+        .frame(width: 44, height: 44)
+        .overlay(
+          RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .stroke(Color.white.opacity(0.20), lineWidth: 1)
+        )
+        .shadow(color: gold.opacity(0.35), radius: 14, y: 10)
+
+      Text("F")
+        .font(.system(size: 20, weight: .heavy, design: .rounded))
+        .foregroundStyle(.white.opacity(0.95))
+        .shadow(color: Color.black.opacity(0.25), radius: 4, y: 2)
+    }
+  }
+}
+
+private struct BenefitRow: View {
+  let icon: String
+  let title: String
+  let subtitle: String
+  let tint: Color
+
+  var body: some View {
+    HStack(alignment: .top, spacing: 12) {
+      Image(systemName: icon)
+        .font(.system(size: 14, weight: .semibold))
+        .foregroundStyle(.white)
+        .frame(width: 28, height: 28)
+        .background(tint.opacity(0.25), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+          RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .stroke(Color.white.opacity(0.14), lineWidth: 1)
+        )
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text(title)
+          .font(.parkinsansSemibold(size: 13))
+          .foregroundStyle(.white.opacity(0.92))
+        Text(subtitle)
+          .font(.parkinsans(size: 12, weight: .regular))
+          .foregroundStyle(.white.opacity(0.68))
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      Spacer(minLength: 0)
+    }
+  }
+}
+
+#Preview("Free User") {
+  // Preview showing Free tier user
+  // Differences: Plan shows "Free", Storage shows "Go Premium" button, no badge
+  let freeSubscription = SubscriptionStore(initialPlan: .free, persistToDefaults: false)
+  NavigationStack {
+    ProfileView()
+      .environment(AppSession())
+      .environmentObject(freeSubscription)
+  }
+}
+
+#Preview("Pro User") {
+  // Preview showing Pro tier user
+  // Differences: Plan shows "Pro (Yearly)", Storage shows "PREMIUM" badge,
+  // storage shows "Unlimited", profile shows blue "PRO" badge
+  let proSubscription = SubscriptionStore(initialPlan: .proYearly, persistToDefaults: false)
+  NavigationStack {
+    ProfileView()
+      .environment(AppSession())
+      .environmentObject(proSubscription)
+  }
+}
+
+#Preview("Founder User") {
+  let founderSubscription = SubscriptionStore(
+    initialPlan: .free, persistToDefaults: false)
+  NavigationStack {
+    ProfileView()
+      .environment(AppSession())
+      .environmentObject(founderSubscription)
+  }
 }

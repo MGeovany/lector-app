@@ -15,7 +15,11 @@ struct Book: Identifiable, Hashable {
   var author: String
   var pagesTotal: Int
   var currentPage: Int
+  /// Optional backend progress (0..1). Used for continuous scroll resume/progress.
+  var readingProgress: Double?
   let sizeBytes: Int64
+  /// Used to render "minutes/hours ago" in the library UI.
+  let lastOpenedAt: Date?
   let lastOpenedDaysAgo: Int
   var isRead: Bool
   var isFavorite: Bool
@@ -28,7 +32,9 @@ struct Book: Identifiable, Hashable {
     author: String,
     pagesTotal: Int,
     currentPage: Int,
+    readingProgress: Double? = nil,
     sizeBytes: Int64,
+    lastOpenedAt: Date? = nil,
     lastOpenedDaysAgo: Int,
     isRead: Bool,
     isFavorite: Bool,
@@ -40,14 +46,43 @@ struct Book: Identifiable, Hashable {
     self.author = author
     self.pagesTotal = pagesTotal
     self.currentPage = currentPage
+    self.readingProgress = readingProgress
     self.sizeBytes = sizeBytes
+    self.lastOpenedAt = lastOpenedAt
     self.lastOpenedDaysAgo = lastOpenedDaysAgo
     self.isRead = isRead
     self.isFavorite = isFavorite
     self.tags = tags
   }
 
+  var lastOpenedDisplayText: String {
+    let referenceDate: Date = {
+      if let lastOpenedAt { return lastOpenedAt }
+      // Fallback: keep legacy behavior.
+      return Calendar.current.date(byAdding: .day, value: -lastOpenedDaysAgo, to: Date()) ?? Date()
+    }()
+    let seconds = Date().timeIntervalSince(referenceDate)
+    if seconds < 60 { return "Just now" }
+    if seconds < 60 * 60 {
+      let mins = max(1, Int((seconds / 60).rounded(.down)))
+      return "\(mins)m ago"
+    }
+    if seconds < 60 * 60 * 24 {
+      let hrs = max(1, Int((seconds / (60 * 60)).rounded(.down)))
+      return "\(hrs)h ago"
+    }
+    let days = max(1, Int((seconds / (60 * 60 * 24)).rounded(.down)))
+    return "\(days)d ago"
+  }
+
+  var lastOpenedSortDate: Date {
+    lastOpenedAt
+      ?? Calendar.current.date(byAdding: .day, value: -lastOpenedDaysAgo, to: Date())
+      ?? .distantPast
+  }
+
   var progress: Double {
+    if let readingProgress { return min(1.0, max(0.0, readingProgress)) }
     guard pagesTotal > 0 else { return 0 }
     return min(1.0, max(0.0, Double(currentPage) / Double(pagesTotal)))
   }

@@ -14,6 +14,7 @@ struct ProgressBarView: View {
                 Capsule(style: .continuous)
                     .fill(AppColors.progressFill(for: colorScheme))
                     .frame(width: max(10, geo.size.width * progress), height: 9)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8), value: progress)
             }
         }
         .frame(height: 9)

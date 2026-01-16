@@ -146,4 +146,5 @@ struct ReadingPreferencesDefaults {
   static let font: ReadingFont = .system
   static let fontSize: Double = 17
   static let lineSpacing: Double = 1.12
+  static let continuousScrollForShortDocs: Bool = false
 }

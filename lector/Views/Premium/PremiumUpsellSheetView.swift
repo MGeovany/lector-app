@@ -65,7 +65,7 @@ struct PremiumUpsellSheetView: View {
         .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
 
       Text(
-        "Upgrade for unlimited storage. Pro will include AI features in the next 1–2 months."
+        "Upgrade for \(MAX_STORAGE_PRO_GB)GB storage. Pro will include AI features in the next 1–2 months."
       )
       .font(.parkinsans(size: 14, weight: .regular))
       .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
@@ -80,6 +80,7 @@ struct PremiumUpsellSheetView: View {
       Text("Yearly").tag(BillingCycle.yearly)
     }
     .pickerStyle(.segmented)
+    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: billingCycle)
   }
 
   private var planList: some View {
@@ -101,13 +102,12 @@ struct PremiumUpsellSheetView: View {
       PlanCard(
         title: "Pro",
         priceText: proPriceText,
-        subtitle: "Unlimited storage, sync + backup, and AI soon.",
+        subtitle: "\(MAX_STORAGE_PRO_GB)GB storage, sync + backup, and AI soon.",
         bullets: [
-          "Unlimited storage",
+          "\(MAX_STORAGE_PRO_GB)GB total storage",
           "Sync + backup",
-          "Private stats",
-          "Gentle notifications (opt‑in)",
-          "AI features in 1–2 months (price will increase)",
+          "Private stats (soon)",
+          "AI features in 1–2 months",
         ],
         badgeText: billingCycle == .yearly ? "Popular" : nil,
         isSelected: selectedPlan.isPro,
@@ -145,9 +145,11 @@ struct PremiumUpsellSheetView: View {
         if subscription.isPurchasing {
           ProgressView()
             .tint(.white)
+            .transition(.scale.combined(with: .opacity))
         } else {
           Text(selectedPlan == .free ? "Continue" : "Continue")
             .font(.parkinsansBold(size: 16))
+            .transition(.scale.combined(with: .opacity))
         }
       }
       .foregroundStyle(.white)
@@ -160,7 +162,8 @@ struct PremiumUpsellSheetView: View {
     }
     .buttonStyle(.plain)
     .disabled(subscription.isPurchasing)
-    .opacity(subscription.isPurchasing ? 0.7 : 1.0)
+    .scaleEffect(subscription.isPurchasing ? 0.98 : 1.0)
+    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: subscription.isPurchasing)
     .padding(.top, 6)
   }
 
@@ -218,9 +221,16 @@ private struct PlanCard: View {
   let onTap: () -> Void
 
   @Environment(\.colorScheme) private var colorScheme
+  @State private var isPressed: Bool = false
+
+  private func handleTap() {
+    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+      onTap()
+    }
+  }
 
   var body: some View {
-    Button(action: onTap) {
+    Button(action: handleTap) {
       VStack(alignment: .leading, spacing: 10) {
         HStack(alignment: .firstTextBaseline) {
           VStack(alignment: .leading, spacing: 2) {
@@ -257,6 +267,8 @@ private struct PlanCard: View {
             Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
               .font(.system(size: 16, weight: .semibold))
               .foregroundStyle(isSelected ? AppColors.matteBlack : Color(.separator))
+              .scaleEffect(isSelected ? 1.1 : 1.0)
+              .symbolEffect(.bounce, value: isSelected)
           }
         }
 
@@ -286,17 +298,45 @@ private struct PlanCard: View {
       )
       .overlay(
         RoundedRectangle(cornerRadius: 16, style: .continuous)
-          .stroke(
-            isSelected
-              ? (colorScheme == .dark
-                ? Color.white.opacity(0.35) : AppColors.matteBlack.opacity(0.65))
-              : (colorScheme == .dark
-                ? Color.white.opacity(0.10) : Color(.separator).opacity(0.35)),
-            lineWidth: isSelected ? 1.5 : 1
-          )
+          .stroke(strokeColor, lineWidth: isSelected ? 1.5 : 1)
+      )
+      .scaleEffect(isPressed ? 0.98 : 1.0)
+      .shadow(
+        color: shadowColor,
+        radius: isSelected ? 8 : 0,
+        x: 0,
+        y: isSelected ? 4 : 0
       )
     }
     .buttonStyle(.plain)
+    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 0)
+        .onChanged { _ in isPressed = true }
+        .onEnded { _ in isPressed = false }
+    )
+  }
+
+  private var strokeColor: Color {
+    if isSelected {
+      return colorScheme == .dark
+        ? Color.white.opacity(0.35)
+        : AppColors.matteBlack.opacity(0.65)
+    } else {
+      return colorScheme == .dark
+        ? Color.white.opacity(0.10)
+        : Color(.separator).opacity(0.35)
+    }
+  }
+
+  private var shadowColor: Color {
+    if isSelected {
+      return colorScheme == .dark
+        ? Color.white.opacity(0.15)
+        : AppColors.matteBlack.opacity(0.2)
+    } else {
+      return Color.clear
+    }
   }
 }
 

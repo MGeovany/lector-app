@@ -6,6 +6,7 @@ import Observation
 final class HomeViewModel {
   var filter: ReadingFilter = .recents
   var selectedBook: Book?
+  var searchQuery: String = ""
 
   private(set) var books: [Book] = []
   private(set) var availableTags: [String] = []
@@ -211,6 +212,11 @@ final class HomeViewModel {
     books[idx].isRead.toggle()
   }
 
+  func markAsRead(bookID: UUID) {
+    guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
+    books[idx].isRead = true
+  }
+
   func toggleFavorite(bookID: UUID) {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
     guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
@@ -239,10 +245,14 @@ final class HomeViewModel {
     }
   }
 
-  func updateBookProgress(bookID: UUID, page: Int, totalPages: Int) {
+  func updateBookProgress(bookID: UUID, page: Int, totalPages: Int, progressOverride: Double? = nil)
+  {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
     books[idx].pagesTotal = max(1, totalPages)
     books[idx].currentPage = min(max(1, page), books[idx].pagesTotal)
+    if let progressOverride {
+      books[idx].readingProgress = min(1.0, max(0.0, progressOverride))
+    }
     books[idx].isRead = (books[idx].currentPage >= books[idx].pagesTotal)
 
     guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else { return }
@@ -250,7 +260,9 @@ final class HomeViewModel {
     // Debounce network updates so we don't spam the backend while the user flips pages quickly.
     pendingReadingPositionTasks[remoteID]?.cancel()
     let pageNumber = books[idx].currentPage
-    let progress = min(1.0, max(0.0, Double(pageNumber) / Double(max(1, books[idx].pagesTotal))))
+    let progress =
+      progressOverride
+      ?? min(1.0, max(0.0, Double(pageNumber) / Double(max(1, books[idx].pagesTotal))))
     pendingReadingPositionTasks[remoteID] = Task { [weak self] in
       try? await Task.sleep(nanoseconds: 650_000_000)  // ~0.65s
       guard let self else { return }
@@ -266,15 +278,46 @@ final class HomeViewModel {
     }
   }
 
+  func deleteBook(bookID: UUID) async {
+    guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
+    guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else {
+      alertMessage = "Missing document id."
+      return
+    }
+
+    do {
+      try await documentsService.deleteDocument(documentID: remoteID)
+      // Remove locally.
+      books.remove(at: idx)
+      if selectedBook?.id == bookID { selectedBook = nil }
+      // Notify other tabs/lists to refresh.
+      NotificationCenter.default.post(name: .documentsDidChange, object: nil)
+    } catch {
+      alertMessage = (error as? LocalizedError)?.errorDescription ?? "Failed to delete document."
+    }
+  }
+
   var filteredBooks: [Book] {
-    switch filter {
-    case .recents:
-      // Return books sorted by last opened (most recent first)
-      return books.sorted { $0.lastOpenedDaysAgo < $1.lastOpenedDaysAgo }
-    case .all:
-      return books
-    case .read:
-      return books.filter { $0.isRead }
+    let base: [Book] = {
+      switch filter {
+      case .recents:
+        // Return books sorted by last opened (most recent first)
+        return books.sorted { $0.lastOpenedSortDate > $1.lastOpenedSortDate }
+      case .all:
+        return books
+      case .read:
+        return books.filter { $0.isRead }
+      }
+    }()
+
+    let q = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !q.isEmpty else { return base }
+    let lowered = q.lowercased()
+    return base.filter { book in
+      if book.title.lowercased().contains(lowered) { return true }
+      if book.author.lowercased().contains(lowered) { return true }
+      if book.tags.contains(where: { $0.lowercased().contains(lowered) }) { return true }
+      return false
     }
   }
 }

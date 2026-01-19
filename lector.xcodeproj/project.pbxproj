@@ -8,16 +8,31 @@
 
 /* Begin PBXBuildFile section */
 		961F8AE62F1941E900AA0ADA /* Sentry in Frameworks */ = {isa = PBXBuildFile; productRef = 96D0B6B9A1C2D3E4F5A6B7C8 /* Sentry */; };
+		9661505F2F1EA3BD003D1AB2 /* Lector.storekit in Resources */ = {isa = PBXBuildFile; fileRef = 9661505E2F1EA3BD003D1AB2 /* Lector.storekit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		9661505E2F1EA3BD003D1AB2 /* Lector.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = Lector.storekit; sourceTree = "<group>"; };
 		969C9A482F0C1A6E00EA0DB2 /* lector.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lector.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		F0A1B2C3D4E5F67890123456 /* FontRegistrar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = FontRegistrar.swift; path = lector/Utils/FontRegistrar.swift; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		96164DE22F1EDC3E0070A508 /* Exceptions for "lector" folder in "lector" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 969C9A472F0C1A6E00EA0DB2 /* lector */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		969C9A4A2F0C1A6E00EA0DB2 /* lector */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				96164DE22F1EDC3E0070A508 /* Exceptions for "lector" folder in "lector" target */,
+			);
 			path = lector;
 			sourceTree = "<group>";
 		};
@@ -38,6 +53,7 @@
 		969C9A3F2F0C1A6E00EA0DB2 = {
 			isa = PBXGroup;
 			children = (
+				9661505E2F1EA3BD003D1AB2 /* Lector.storekit */,
 				969C9A4A2F0C1A6E00EA0DB2 /* lector */,
 				969C9A492F0C1A6E00EA0DB2 /* Products */,
 				96A3D1882F1158CB0021ABAF /* Recovered References */,
@@ -128,6 +144,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9661505F2F1EA3BD003D1AB2 /* Lector.storekit in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -279,6 +296,7 @@
 				DEVELOPMENT_TEAM = F5AC2P3U57;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = lector/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Lector: Clean Reading";
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLName = \"$(PRODUCT_BUNDLE_IDENTIFIER)\";\n    CFBundleURLSchemes =     (\n        lector\n    );\n}";
 				INFOPLIST_KEY_FOUNDER_LIFETIME_PRODUCT_ID = lector.founder.sub;
@@ -321,6 +339,7 @@
 				DEVELOPMENT_TEAM = F5AC2P3U57;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = lector/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Lector: Clean Reading";
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleURLName = \"$(PRODUCT_BUNDLE_IDENTIFIER)\";\n    CFBundleURLSchemes =     (\n        lector\n    );\n}";
 				INFOPLIST_KEY_FOUNDER_LIFETIME_PRODUCT_ID = lector.founder.sub;

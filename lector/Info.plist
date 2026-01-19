@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>FOUNDER_LIFETIME_PRODUCT_ID</key>
+	<string>lector.founder.sub</string>
+	<key>PRO_MONTHLY_PRODUCT_ID</key>
+	<string>lector.pro.monthly</string>
+	<key>PRO_YEARLY_PRODUCT_ID</key>
+	<string>lector.pro.yearly</string>
+</dict>
+</plist>

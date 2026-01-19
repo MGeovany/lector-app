@@ -1,0 +1,121 @@
+{
+  "appPolicies" : {
+    "eula" : "",
+    "policies" : [
+      {
+        "locale" : "en_US",
+        "policyText" : "",
+        "policyURL" : ""
+      }
+    ]
+  },
+  "identifier" : "544B1E54",
+  "nonRenewingSubscriptions" : [
+
+  ],
+  "products" : [
+    {
+      "displayPrice" : "99.99",
+      "familyShareable" : false,
+      "internalID" : "6758003910",
+      "localizations" : [
+        {
+          "description" : "A special one-time purchase for early adopters.",
+          "displayName" : "Early Founder Access",
+          "locale" : "en_US"
+        }
+      ],
+      "productID" : "lector.founder.sub",
+      "referenceName" : "Early Founder Access",
+      "type" : "NonConsumable"
+    }
+  ],
+  "settings" : {
+    "_applicationInternalID" : "6757951061",
+    "_askToBuyEnabled" : false,
+    "_billingGracePeriodEnabled" : false,
+    "_billingIssuesEnabled" : false,
+    "_developerTeamID" : "F5AC2P3U57",
+    "_disableDialogs" : false,
+    "_failTransactionsEnabled" : false,
+    "_lastSynchronizedDate" : 790538035.38351703,
+    "_locale" : "en_US",
+    "_renewalBillingIssuesEnabled" : false,
+    "_storefront" : "USA",
+    "_storeKitErrors" : [
+
+    ],
+    "_timeRate" : 0
+  },
+  "subscriptionGroups" : [
+    {
+      "id" : "21897130",
+      "localizations" : [
+
+      ],
+      "name" : "lector-pro",
+      "subscriptions" : [
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "5.99",
+          "familyShareable" : false,
+          "groupNumber" : 1,
+          "internalID" : "6758001380",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "More space. More control. A better way to read.",
+              "displayName" : "Lector Pro Access (Monthly)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "lector.pro.monthly",
+          "recurringSubscriptionPeriod" : "P1M",
+          "referenceName" : "Lector Pro Monthly",
+          "subscriptionGroupID" : "21897130",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        },
+        {
+          "adHocOffers" : [
+
+          ],
+          "codeOffers" : [
+
+          ],
+          "displayPrice" : "59.99",
+          "familyShareable" : false,
+          "groupNumber" : 2,
+          "internalID" : "6758002853",
+          "introductoryOffer" : null,
+          "localizations" : [
+            {
+              "description" : "More reading. Less cost. One full year.",
+              "displayName" : "Lectro Pro Access (Yearly)",
+              "locale" : "en_US"
+            }
+          ],
+          "productID" : "lector.pro.yearly",
+          "recurringSubscriptionPeriod" : "P1Y",
+          "referenceName" : "Lector Pro Yearly",
+          "subscriptionGroupID" : "21897130",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
+        }
+      ]
+    }
+  ],
+  "version" : {
+    "major" : 4,
+    "minor" : 0
+  }
+}

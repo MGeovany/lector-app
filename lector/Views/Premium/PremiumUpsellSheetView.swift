@@ -176,7 +176,7 @@ struct PremiumUpsellSheetView: View {
     if selectedPlan == .free {
       return "Downgrade to Free"
     }
-    if subscription.isPremium && selectedPlan.isPro {
+    if subscription.isPremium && selectedPlan.isPremium {
       return "Change plan"
     }
     return "Continue"

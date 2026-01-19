@@ -99,7 +99,7 @@ struct StorageUsageCardView: View {
 
   private func formatBytes(_ bytes: Int64) -> String {
     let formatter = ByteCountFormatter()
-    formatter.allowedUnits = [.useKB, .useMB]
+    formatter.allowedUnits = [.useKB, .useMB, .useGB, .useTB]
     formatter.countStyle = .file
     formatter.includesUnit = true
     formatter.isAdaptive = true

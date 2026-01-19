@@ -203,7 +203,7 @@ struct PremiumUpsellSheetView: View {
     if let price {
       return billingCycle == .monthly ? "\(price) / month" : "\(price) / year"
     }
-    return billingCycle == .monthly ? "$3.99 / month" : "$39 / year"
+    return billingCycle == .monthly ? "$5.99 / month" : "$59.99 / year"
   }
 
   private var founderPriceText: String {

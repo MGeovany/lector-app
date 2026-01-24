@@ -68,16 +68,27 @@ enum SupabaseConfig {
 }
 
 enum WebAppLinks {
-  static var privacyPolicy: URL {
+  /// Public website base URL (hosts privacy + terms pages).
+  /// Configure via `WEB_APP_BASE_URL` in Info.plist.
+  static var baseURL: URL {
     let value =
-      (Bundle.main.object(forInfoDictionaryKey: "PRIVACY_POLICY_URL") as? String)?
-      .trimmingCharacters(in: .whitespacesAndNewlines)
-    let fallback = "https://lector.thefndrs.com/privacy"
+      (Bundle.main.object(forInfoDictionaryKey: "WEB_APP_BASE_URL") as? String)?.trimmingCharacters(
+        in: .whitespacesAndNewlines)
+    let fallback = "https://lector.thefndrs.com"
     return normalizeHTTPURL(value?.isEmpty == false ? value! : fallback, fallback: fallback)
   }
 
+  static var privacyPolicy: URL {
+    baseURL.appendingPathComponent("privacy")
+  }
+
+  static var termsOfService: URL {
+    baseURL.appendingPathComponent("terms")
+  }
+
   static let appleStandardEULA = URL(
-    string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+    string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/"
+  )!
 }
 
 /// Ensures a valid absolute http/https URL even if the configured value is missing a scheme.

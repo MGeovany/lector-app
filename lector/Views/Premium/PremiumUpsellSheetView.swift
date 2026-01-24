@@ -75,14 +75,6 @@ struct PremiumUpsellSheetView: View {
         .font(.parkinsansBold(size: 34))
         .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
 
-      Text(
-        subscription.isPremium
-          ? "Switch between plans or manage your subscription. Pro includes \(MAX_STORAGE_PRO_GB)GB storage and AI features coming soon."
-          : "Upgrade for \(MAX_STORAGE_PRO_GB)GB storage. Pro will include AI features in the next 1–2 months."
-      )
-      .font(.parkinsans(size: 14, weight: .regular))
-      .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.60) : .secondary)
-      .fixedSize(horizontal: false, vertical: true)
     }
     .frame(maxWidth: .infinity)
   }
@@ -124,7 +116,7 @@ struct PremiumUpsellSheetView: View {
           "\(MAX_STORAGE_PRO_GB)GB total storage",
           "Sync + backup",
           "Private stats (soon)",
-          "AI features in 1–2 months",
+          "AI features (coming soon)",
         ],
         badgeText: billingCycle == .yearly ? "Popular" : nil,
         isSelected: selectedPlan.isPro,
@@ -224,52 +216,66 @@ struct PremiumUpsellSheetView: View {
         Text(restoreMessage ?? subscription.lastErrorMessage ?? "Done.")
       }
 
-#if DEBUG
-      if debugCanResetFounderPurchase {
-        Button {
-          Task {
-            let newValue = !subscription.debugIsIgnoringFounderPurchase
-            await subscription.debugSetIgnoreFounderPurchase(newValue)
-            if subscription.lastErrorMessage == nil {
-              restoreMessage = newValue
-                ? "Founder purchase ignored (debug)."
-                : "Founder purchase re-enabled (debug)."
-              showRestoreAlert = true
+      /*  #if DEBUG
+        if debugCanResetFounderPurchase {
+          Button {
+            Task {
+              let newValue = !subscription.debugIsIgnoringFounderPurchase
+              await subscription.debugSetIgnoreFounderPurchase(newValue)
+              if subscription.lastErrorMessage == nil {
+                restoreMessage =
+                  newValue
+                  ? "Founder purchase ignored (debug)."
+                  : "Founder purchase re-enabled (debug)."
+                showRestoreAlert = true
+              }
             }
-          }
-        } label: {
-          Text(
-            subscription.debugIsIgnoringFounderPurchase
-              ? "Re-enable Founder purchase (Debug)"
-              : "Ignore Founder purchase (Debug)"
-          )
+          } label: {
+            Text(
+              subscription.debugIsIgnoringFounderPurchase
+                ? "Re-enable Founder purchase (Debug)"
+                : "Ignore Founder purchase (Debug)"
+            )
             .font(.parkinsans(size: 13, weight: .semibold))
             .foregroundStyle(.secondary)
             .padding(.top, 10)
+          }
+          .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
+      #endif
+      */
+      HStack(spacing: 14) {
+        Link("Privacy Policy", destination: WebAppLinks.privacyPolicy)
+        Link("Terms of Use (EULA)", destination: WebAppLinks.appleStandardEULA)
       }
-#endif
+      .font(.parkinsans(size: 12, weight: .semibold))
+      .padding(.top, 14)
+      .padding(.bottom, 8)
+      .tint(.secondary)
 
-      Text("Recurring billing for Pro. Cancel anytime.")
-        .font(.parkinsans(size: 12, weight: .regular))
-        .foregroundStyle(.secondary)
-        .multilineTextAlignment(.center)
+      Text(
+        "Pro is an auto-renewing subscription. It renews unless cancelled at least 24 hours before the end of the current period. Manage or cancel in your App Store account settings."
+      )
+      .font(.parkinsans(size: 12, weight: .regular))
+      .foregroundStyle(.secondary)
+      .multilineTextAlignment(.center)
     }
     .frame(maxWidth: .infinity)
   }
 
   private var proPriceText: String {
     let plan: SubscriptionPlan = billingCycle == .monthly ? .proMonthly : .proYearly
-    let price = subscription.priceText(for: plan)
-    if let price {
-      return billingCycle == .monthly ? "\(price) / month" : "\(price) / year"
+    guard let price = subscription.priceText(for: plan) else {
+      return "Loading..."
     }
-    return billingCycle == .monthly ? "$5.99 / month" : "$59.99 / year"
+    return billingCycle == .monthly ? "\(price) / month" : "\(price) / year"
   }
 
   private var founderPriceText: String {
-    subscription.priceText(for: .founderLifetime) ?? "$99 one‑time"
+    guard let price = subscription.priceText(for: .founderLifetime) else {
+      return "Loading..."
+    }
+    return "\(price) one‑time"
   }
 
   private var downgradeInfoText: String {
@@ -288,16 +294,16 @@ struct PremiumUpsellSheetView: View {
     return f.string(from: date)
   }
 
-#if DEBUG
-  private var debugCanResetFounderPurchase: Bool {
-    let isSandboxReceipt = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
-#if targetEnvironment(simulator)
-    return true
-#else
-    return isSandboxReceipt
-#endif
-  }
-#endif
+  #if DEBUG
+    private var debugCanResetFounderPurchase: Bool {
+      let isSandboxReceipt = Bundle.main.appStoreReceiptURL?.lastPathComponent == "sandboxReceipt"
+      #if targetEnvironment(simulator)
+        return true
+      #else
+        return isSandboxReceipt
+      #endif
+    }
+  #endif
 }
 
 private struct PlanCard: View {

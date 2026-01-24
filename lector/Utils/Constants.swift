@@ -67,6 +67,19 @@ enum SupabaseConfig {
   static let redirectURL = URL(string: "\(redirectScheme)://auth-callback")!
 }
 
+enum WebAppLinks {
+  static var privacyPolicy: URL {
+    let value =
+      (Bundle.main.object(forInfoDictionaryKey: "PRIVACY_POLICY_URL") as? String)?
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    let fallback = "https://lector.thefndrs.com/privacy"
+    return normalizeHTTPURL(value?.isEmpty == false ? value! : fallback, fallback: fallback)
+  }
+
+  static let appleStandardEULA = URL(
+    string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
+}
+
 /// Ensures a valid absolute http/https URL even if the configured value is missing a scheme.
 private func normalizeHTTPURL(_ raw: String, fallback: String) -> URL {
   let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)

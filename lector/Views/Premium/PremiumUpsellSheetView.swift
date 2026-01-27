@@ -316,7 +316,6 @@ private struct PlanCard: View {
   let onTap: () -> Void
 
   @Environment(\.colorScheme) private var colorScheme
-  @State private var isPressed: Bool = false
 
   private func handleTap() {
     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -395,7 +394,6 @@ private struct PlanCard: View {
         RoundedRectangle(cornerRadius: 16, style: .continuous)
           .stroke(strokeColor, lineWidth: isSelected ? 1.5 : 1)
       )
-      .scaleEffect(isPressed ? 0.98 : 1.0)
       .shadow(
         color: shadowColor,
         radius: isSelected ? 8 : 0,
@@ -404,12 +402,9 @@ private struct PlanCard: View {
       )
     }
     .buttonStyle(.plain)
+    // Use a ButtonStyle press effect so vertical drags still scroll the ScrollView.
+    .buttonStyle(PlanCardPressStyle())
     .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-    .simultaneousGesture(
-      DragGesture(minimumDistance: 0)
-        .onChanged { _ in isPressed = true }
-        .onEnded { _ in isPressed = false }
-    )
   }
 
   private var strokeColor: Color {
@@ -440,6 +435,14 @@ private struct PlanCard: View {
     } else {
       return colorScheme == .dark ? Color.white.opacity(0.22) : Color(.separator)
     }
+  }
+}
+
+private struct PlanCardPressStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+      .animation(.spring(response: 0.25, dampingFraction: 0.85), value: configuration.isPressed)
   }
 }
 

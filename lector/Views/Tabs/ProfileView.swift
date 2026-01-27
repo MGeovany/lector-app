@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ProfileView: View {
   @EnvironmentObject private var subscription: SubscriptionStore
@@ -28,6 +29,8 @@ struct ProfileView: View {
     .rawValue
   @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
   @AppStorage(AppPreferenceKeys.accountDisabled) private var accountDisabled: Bool = false
+
+  private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   var body: some View {
 
@@ -244,7 +247,26 @@ struct ProfileView: View {
       .safeAreaInset(edge: .bottom, spacing: 0) {
         Color.clear.frame(height: 62)
       }
-      .sheet(isPresented: $showPremiumSheet) {
+      // On iPad, present full-screen so the subscription UI is bigger.
+      .sheet(
+        isPresented: Binding(
+          get: { showPremiumSheet && !isPad },
+          set: { newValue in
+            if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+          }
+        )
+      ) {
+        PremiumUpsellSheetView()
+          .environmentObject(subscription)
+      }
+      .fullScreenCover(
+        isPresented: Binding(
+          get: { showPremiumSheet && isPad },
+          set: { newValue in
+            if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+          }
+        )
+      ) {
         PremiumUpsellSheetView()
           .environmentObject(subscription)
       }

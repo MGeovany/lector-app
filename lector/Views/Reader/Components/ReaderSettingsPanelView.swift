@@ -10,7 +10,6 @@ struct ReaderSettingsPanelView: View {
   @Binding var searchVisible: Bool
   @Binding var searchQuery: String
 
-  // Local state for drag that doesn't trigger content re-renders
   @State private var localDragOffset: CGFloat = 0
   @State private var screen: Screen = .main
   @State private var fontPage: Int = 0
@@ -39,10 +38,6 @@ struct ReaderSettingsPanelView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: containerHeight * 0.55)
-
-        // .border(Color.red, width: 1)
-
-        // TODO: Match to each theme's surfaceBackground
         .background(
           preferences.theme == .day
             ? Color(
@@ -53,7 +48,7 @@ struct ReaderSettingsPanelView: View {
         )
         .clipShape(.rect(topLeadingRadius: 24, topTrailingRadius: 24))
         .offset(y: max(0, localDragOffset))
-        .animation(nil, value: localDragOffset)  // Disable animation during drag
+        .animation(nil, value: localDragOffset)
         .transition(.move(edge: .bottom).combined(with: .opacity))
       }
     }
@@ -65,7 +60,6 @@ struct ReaderSettingsPanelView: View {
         screen = .main
         fontPage = 0
       } else {
-        // Reset local offset when panel opens
         localDragOffset = 0
         screen = .main
         fontPage = 0
@@ -93,31 +87,25 @@ struct ReaderSettingsPanelView: View {
         .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(0.40))
         .padding(.bottom, 20)
     }
-    // .border(Color.red, width: 1)
     .contentShape(Rectangle())
     .highPriorityGesture(
       DragGesture(minimumDistance: 2)
         .onChanged { value in
-          // Use translation directly for immediate response - it's more accurate for drag speed
-          // Only allow dragging down (positive translation)
           if value.translation.height > 0 {
-            // Update immediately without throttling for smooth, responsive drag
             localDragOffset = value.translation.height
           }
         }
-        .onEnded { value in
+        .onEnded { _ in
           let finalOffset = localDragOffset
-
           let threshold: CGFloat = 100
+
           if finalOffset > threshold {
-            // Sync with binding and close
             dragOffset = 0
             localDragOffset = 0
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
               isPresented = false
             }
           } else {
-            // Sync with binding and snap back
             dragOffset = 0
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
               localDragOffset = 0
@@ -127,537 +115,117 @@ struct ReaderSettingsPanelView: View {
     )
   }
 
-  // MARK: - Main settings (image 1)
-
   private var mainSettings: some View {
-    VStack(spacing: 14) {
-      // Row 1: Theme pill + Voice — equal horizontal space, content centered
-      HStack(spacing: 12) {
-        themeBar
-          .frame(maxWidth: .infinity)
+    let gap: CGFloat = 16
 
-        circleAction(
-          system: "waveform",
-          title: "Voice",
-          isEnabled: false,
-          action: {}
-        )
-        .frame(maxWidth: .infinity, alignment: .center)
-      }
+    let themeH: CGFloat = 80
+    let searchH: CGFloat = 80
+    let tallH: CGFloat = 140
+    let bottomH: CGFloat = 80
+    let textH: CGFloat = searchH + tallH - bottomH
 
-      // Row 2: Text card + Search/Ask AI — equal horizontal space, content centered
-      HStack(spacing: 12) {
-        textCustomizeCard
-          .frame(width: 150, height: 150)
-          .frame(maxWidth: .infinity, alignment: .center)
+    let totalH: CGFloat = themeH + gap + searchH + gap + tallH
 
-        VStack(spacing: 12) {
-          circleAction(
-            system: "magnifyingglass",
-            title: "Search",
-            isEnabled: true,
-            action: {
-              // Show search in reader content, close settings.
-              searchVisible = true
-              if searchQuery.isEmpty { searchQuery = "" }
-              withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                isPresented = false
+    return GeometryReader { geo in
+      let totalW = geo.size.width
+      let leftW = (totalW - gap) * 0.80
+      let rightW = (totalW - gap) * 0.20
+
+      let searchColW = rightW
+      let textColW = leftW - gap - searchColW
+
+      HStack(alignment: .top, spacing: gap) {
+        VStack(spacing: gap) {
+          debugBox("Theme")
+            .frame(height: themeH)
+
+          HStack(alignment: .top, spacing: gap) {
+            VStack(spacing: gap) {
+              debugBox("Text")
+                .frame(height: textH)
+
+              HStack(spacing: gap) {
+                debugBox("Offline")
+                  .frame(maxWidth: .infinity)
+                  .frame(height: bottomH)
+
+                debugBox("Lock")
+                  .frame(maxWidth: .infinity)
+                  .frame(height: bottomH)
               }
             }
-          )
+            .frame(width: textColW)
 
-          circleAction(
-            system: "sparkles",
-            title: "Ask AI",
-            isEnabled: false,
-            action: {}
-          )
-        }
-        .frame(maxWidth: .infinity, alignment: .center)
-      }
+            VStack(spacing: gap) {
+              debugBox("Search")
+                .frame(height: searchH)
 
-      HStack(spacing: 12) {
-        circleAction(
-          system: "wifi.slash",
-          title: "Offline",
-          isEnabled: false,
-          action: {}
-        )
-
-        circleAction(
-          system: isLocked ? "lock.fill" : "lock.open",
-          title: "Lock",
-          isEnabled: true,
-          isSelected: isLocked,
-          action: {
-            isLocked.toggle()
-            if isLocked {
-              withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                isPresented = false
-              }
+              debugBox("Text Size")
+                .frame(height: tallH)
             }
+            .frame(width: searchColW)
           }
-        )
-
-        pillAction(
-          system: "textformat.size",
-          title: "Text Size",
-          value: "\(Int(preferences.fontSize.rounded()))",
-          onMinus: { preferences.fontSize = max(14, preferences.fontSize - 1) },
-          onPlus: { preferences.fontSize = min(26, preferences.fontSize + 1) }
-        )
-        .frame(maxWidth: .infinity)
-      }
-    }
-  }
-
-  private var themeBar: some View {
-    VStack(spacing: 0) {
-      // Pill-shaped bar with theme indicators
-      ZStack {
-        // Background bar
-        RoundedRectangle(cornerRadius: 99, style: .continuous)
-          .fill(preferences.theme.surfaceText.opacity(0.06))
-          .frame(height: 50)
-
-        // Theme indicators - space-between alignment
-        HStack(spacing: 0) {
-          // Light theme
-          themeIndicator(theme: .day)
-
-          Spacer(minLength: 0)
-
-          // Amber theme
-          themeIndicator(theme: .amber)
-
-          Spacer(minLength: 0)
-
-          // Dark theme
-          themeIndicator(theme: .night)
         }
-        .padding(.horizontal, 20)
-      }
-      .frame(height: 50)
-      .frame(maxWidth: .infinity)
+        .frame(width: leftW)
 
-      // "Theme" label centered below
-      Text("Theme")
-        .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(0.40))
-    }
-  }
+        VStack(spacing: gap) {
+          debugBox("Voice")
+            .frame(height: themeH)
 
-  private func themeIndicator(theme: ReadingTheme) -> some View {
-    let isSelected = preferences.theme == theme
+          debugBox("Transitions")
+            .frame(height: searchH)
 
-    // Color for each theme
-    let themeColor: Color = {
-      switch theme {
-      case .day:
-        return Color.white
-      case .night:
-        return Color(red: 0.06, green: 0.06, blue: 0.08)
-      case .amber:
-        return Color(red: 0.98, green: 0.93, blue: 0.74)
-      }
-    }()
-
-    return Button {
-      withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-        preferences.theme = theme
-      }
-    } label: {
-      if isSelected {
-        // Selected: large white circle with shadow and inner gray circle
-        ZStack {
-          Circle()
-            .fill(
-              preferences.theme == .night || preferences.theme == .amber
-                ? preferences.theme.surfaceText.opacity(0.15) : Color.white
-            )
-            .frame(width: 40, height: 40)
-
-          Circle()
-            .stroke(Color.white, lineWidth: 0)
-            .frame(width: 44, height: 44)
-
-          // Inner gray circle
-          Circle()
-            .fill(themeColor)
-            .frame(width: 16, height: 16)
-            .overlay(
-              Circle()
-                .stroke(preferences.theme.surfaceText.opacity(0.15), lineWidth: 1)
-            )
+          debugBox("Brightness")
+            .frame(height: tallH)
         }
-        .padding(5)
-        .transition(.scale(scale: 0.8).combined(with: .opacity))
-      } else {
-        // Unselected: small solid color circle with border
-        Circle()
-          .fill(themeColor)
-          .frame(width: 16, height: 16)
-          .overlay(
-            Circle()
-              .stroke(preferences.theme.surfaceText.opacity(0.15), lineWidth: 1)
-          )
-          .transition(.scale(scale: 0.9).combined(with: .opacity))
+        .frame(width: rightW)
       }
     }
-    .buttonStyle(.plain)
-    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isSelected)
+    .frame(height: totalH)
   }
 
-  private var textCustomizeCard: some View {
-    Button {
-      withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-        screen = .textCustomize
-      }
-    } label: {
-      VStack(alignment: .leading, spacing: 10) {
-        Image(systemName: "textformat.size")
-          .font(.system(size: 20, weight: .bold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
+  private func debugBox(_ title: String) -> some View {
+    ZStack {
+      RoundedRectangle(cornerRadius: 14, style: .continuous)
+        .stroke(Color.blue, lineWidth: 3)
 
-        Spacer(minLength: 0)
-
-        Text("Text")
-          .font(.system(size: 20, weight: .bold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
-
-        Text("Customize")
-          .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceSecondaryText)
-      }
-      .padding(16)
-      .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      .background(cardBackground)
-      .overlay(cardStroke)
+      Text(title)
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundStyle(Color.blue)
+        .multilineTextAlignment(.center)
+        .padding(.horizontal, 8)
     }
-    .buttonStyle(.plain)
   }
-
-  // MARK: - Text customize (image 2)
 
   private var textCustomizeSettings: some View {
     VStack(spacing: 16) {
-      VStack(alignment: .leading, spacing: 10) {
-        Text("Select Font")
-          .font(.system(size: 13, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceSecondaryText)
-
-        TabView(selection: $fontPage) {
-          fontPageView(fonts: [.system, .georgia, .palatino, .avenir])
-            .tag(0)
-          fontPageView(fonts: [.iowan, .menlo])
-            .tag(1)
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-
-        HStack(spacing: 6) {
-          Circle()
-            .fill(
-              fontPage == 0
-                ? preferences.theme.surfaceText.opacity(0.85)
-                : preferences.theme.surfaceText.opacity(0.18)
-            )
-            .frame(width: 6, height: 6)
-          Circle()
-            .fill(
-              fontPage == 1
-                ? preferences.theme.surfaceText.opacity(0.85)
-                : preferences.theme.surfaceText.opacity(0.18)
-            )
-            .frame(width: 6, height: 6)
-        }
+      debugBox("Text Customize Screen")
         .frame(maxWidth: .infinity)
-        .padding(.top, 2)
-      }
-
-      pillAction(
-        system: "textformat.size",
-        title: "Font Size",
-        value: "\(Int(preferences.fontSize.rounded()))",
-        onMinus: { preferences.fontSize = max(14, preferences.fontSize - 1) },
-        onPlus: { preferences.fontSize = min(26, preferences.fontSize + 1) }
-      )
-
-      textAlignmentCards
+        .frame(height: 220)
 
       Button {
         withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
           screen = .main
         }
       } label: {
-        HStack(spacing: 10) {
-          Image(systemName: "chevron.left")
-            .font(.system(size: 14, weight: .semibold))
-          Text("Back")
-            .font(.system(size: 14, weight: .bold))
-        }
-        .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-        .background(
-          Capsule(style: .continuous)
-            .fill(preferences.theme.surfaceText.opacity(preferences.theme == .night ? 0.10 : 0.06))
-        )
-        .overlay(
-          Capsule(style: .continuous)
-            .stroke(preferences.theme.surfaceText.opacity(0.12), lineWidth: 1)
-        )
-        .frame(maxWidth: .infinity)
+        Text("Back")
+          .font(.system(size: 14, weight: .bold))
+          .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
+          .padding(.horizontal, 18)
+          .padding(.vertical, 12)
+          .background(
+            Capsule(style: .continuous)
+              .fill(
+                preferences.theme.surfaceText.opacity(preferences.theme == .night ? 0.10 : 0.06))
+          )
+          .overlay(
+            Capsule(style: .continuous)
+              .stroke(preferences.theme.surfaceText.opacity(0.12), lineWidth: 1)
+          )
+          .frame(maxWidth: .infinity)
       }
       .buttonStyle(.plain)
       .padding(.top, 6)
     }
-  }
-
-  private func fontPageView(fonts: [ReadingFont]) -> some View {
-    HStack(spacing: 12) {
-      ForEach(fonts) { f in
-        fontCard(f)
-      }
-      // If page has only 2 fonts, fill remaining space to keep sizing consistent
-      if fonts.count == 2 {
-        Spacer(minLength: 0)
-      }
-    }
-    .padding(.vertical, 6)
-  }
-
-  private func fontCard(_ font: ReadingFont) -> some View {
-    let isSelected = preferences.font == font
-    return Button {
-      withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
-        preferences.font = font
-      }
-    } label: {
-      VStack(spacing: 6) {
-        Text("Aa")
-          .font(font.font(size: 30))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
-
-        Text(font.title)
-          .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceSecondaryText)
-      }
-      .frame(width: 86, height: 74)
-      .background(
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .fill(preferences.theme.surfaceText.opacity(isSelected ? 0.08 : 0.04))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .stroke(
-            isSelected
-              ? preferences.theme.accent.opacity(0.45)
-              : preferences.theme.surfaceText.opacity(0.08),
-            lineWidth: 2
-          )
-      )
-    }
-    .buttonStyle(.plain)
-  }
-
-  private var textAlignmentCards: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("Text Alignment")
-        .font(.system(size: 13, weight: .semibold))
-        .foregroundStyle(preferences.theme.surfaceSecondaryText)
-
-      HStack(spacing: 12) {
-        alignmentCard(
-          title: "Default",
-          description: "Text lines up on the left.",
-          value: .default
-        )
-        alignmentCard(
-          title: "Justify",
-          description: "Text spreads evenly across lines.",
-          value: .justify
-        )
-      }
-    }
-  }
-
-  private func alignmentCard(
-    title: String,
-    description: String,
-    value: ReadingTextAlignment
-  ) -> some View {
-    let isSelected = preferences.textAlignment == value
-    return Button {
-      withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
-        preferences.textAlignment = value
-      }
-    } label: {
-      VStack(alignment: .leading, spacing: 8) {
-        HStack {
-          Text(title)
-            .font(.system(size: 14, weight: .bold))
-            .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
-          Spacer()
-          Image(systemName: "line.3.horizontal.decrease")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(preferences.theme.surfaceSecondaryText)
-        }
-
-        Text(description)
-          .font(.system(size: 11, weight: .regular))
-          .foregroundStyle(preferences.theme.surfaceSecondaryText)
-          .fixedSize(horizontal: false, vertical: true)
-      }
-      .padding(14)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .fill(preferences.theme.surfaceText.opacity(isSelected ? 0.10 : 0.04))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .stroke(
-            isSelected
-              ? preferences.theme.accent.opacity(0.45)
-              : preferences.theme.surfaceText.opacity(0.08),
-            lineWidth: 2
-          )
-      )
-    }
-    .buttonStyle(.plain)
-  }
-
-  // MARK: - Small building blocks
-
-  private func circleAction(
-    system: String,
-    title: String,
-    isEnabled: Bool,
-    isSelected: Bool = false,
-    action: @escaping () -> Void
-  ) -> some View {
-    // Adjust opacities based on theme for better contrast
-    let iconOpacity = isEnabled ? 0.90 : (preferences.theme == .day ? 0.25 : 0.50)
-    let backgroundOpacity =
-      isSelected
-      ? (preferences.theme == .day ? 0.10 : 0.15)
-      : (preferences.theme == .day ? 0.06 : 0.12)
-    let strokeOpacity =
-      isSelected
-      ? (preferences.theme == .day ? 0.18 : 0.25)
-      : (preferences.theme == .day ? 0.10 : 0.18)
-    let textOpacity = isEnabled ? 1.0 : (preferences.theme == .day ? 0.35 : 0.60)
-
-    return Button(action: action) {
-      VStack(spacing: 8) {
-        Image(systemName: system)
-          .font(.system(size: 18, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(iconOpacity))
-          .frame(width: 44, height: 44)
-          .background(
-            Circle()
-              .fill(preferences.theme.surfaceText.opacity(backgroundOpacity))
-          )
-          .overlay(
-            Circle()
-              .stroke(preferences.theme.surfaceText.opacity(strokeOpacity), lineWidth: 1)
-          )
-        Text(title)
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(textOpacity))
-      }
-      .frame(maxWidth: .infinity)
-      .padding(.vertical, 10)
-    }
-    .buttonStyle(.plain)
-    .disabled(!isEnabled)
-  }
-
-  private func pillAction(
-    system: String,
-    title: String,
-    value: String,
-    onMinus: @escaping () -> Void,
-    onPlus: @escaping () -> Void
-  ) -> some View {
-    HStack(spacing: 12) {
-      Image(systemName: system)
-        .font(.system(size: 14, weight: .bold))
-        .foregroundStyle(preferences.theme.surfaceText.opacity(0.70))
-
-      VStack(alignment: .leading, spacing: 2) {
-        Text(title)
-          .font(.system(size: 12, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceSecondaryText)
-        Text(value)
-          .font(.system(size: 16, weight: .bold, design: .rounded))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(0.92))
-          .monospacedDigit()
-      }
-
-      Spacer(minLength: 0)
-
-      HStack(spacing: 8) {
-        iconCircle(system: "minus", action: onMinus)
-        iconCircle(system: "plus", action: onPlus)
-      }
-    }
-    .padding(14)
-    .background(cardBackground)
-    .overlay(cardStroke)
-  }
-
-  private func iconCircle(system: String, action: @escaping () -> Void) -> some View {
-    // Adjust opacities for better contrast in dark/amber themes
-    let backgroundOpacity = preferences.theme == .day ? 0.06 : 0.12
-    let strokeOpacity = preferences.theme == .day ? 0.10 : 0.18
-
-    return Button(action: action) {
-      Image(systemName: system)
-        .font(.system(size: 12, weight: .bold))
-        .foregroundStyle(preferences.theme.surfaceText.opacity(0.88))
-        .frame(width: 32, height: 32)
-        .background(
-          Circle()
-            .fill(preferences.theme.surfaceText.opacity(backgroundOpacity))
-        )
-        .overlay(
-          Circle()
-            .stroke(preferences.theme.surfaceText.opacity(strokeOpacity), lineWidth: 1)
-        )
-    }
-    .buttonStyle(.plain)
-  }
-
-  private var cardBackground: some View {
-    let fillColor: Color = {
-      switch preferences.theme {
-      case .day:
-        return Color.white.opacity(0.92)
-      case .night:
-        return Color.white.opacity(0.08)
-      case .amber:
-        return Color.white.opacity(0.10)
-      }
-    }()
-
-    return RoundedRectangle(cornerRadius: 22, style: .continuous)
-      .fill(fillColor)
-  }
-
-  private var cardStroke: some View {
-    let strokeColor: Color = {
-      switch preferences.theme {
-      case .day:
-        return Color.black.opacity(0.08)
-      case .night:
-        return Color.white.opacity(0.15)
-      case .amber:
-        return Color.white.opacity(0.18)
-      }
-    }()
-
-    return RoundedRectangle(cornerRadius: 22, style: .continuous)
-      .stroke(strokeColor, lineWidth: 1)
   }
 }

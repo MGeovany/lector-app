@@ -32,8 +32,8 @@ struct ReaderSettingsPanelView: View {
                 textCustomizeSettings
               }
             }
-            .padding(.horizontal, 18)
-            .padding(.bottom, 20)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 10)
           }
         }
         .frame(maxWidth: .infinity)
@@ -131,13 +131,16 @@ struct ReaderSettingsPanelView: View {
       let leftW = (totalW - gap) * 0.80
       let rightW = (totalW - gap) * 0.20
 
+      let themePillW = leftW * 0.93
       let searchColW = leftW * 0.35
       let textColW = leftW - gap - searchColW
 
       HStack(alignment: .top, spacing: gap) {
         VStack(spacing: gap) {
           themePill
+            .frame(width: themePillW)
             .frame(height: themeH)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
           HStack(alignment: .top, spacing: gap) {
             VStack(spacing: gap) {
@@ -378,7 +381,7 @@ struct ReaderSettingsPanelView: View {
       systemImage: "waveform",
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
-      isEnabled: false,
+      isEnabled: true,
       action: {}
     )
   }
@@ -422,7 +425,7 @@ struct ReaderSettingsPanelView: View {
   private var searchTile: some View {
     RoundIconTile(
       title: "Search",
-      systemImage: "magnifyingglass",
+      systemImage: "doc.text.magnifyingglass",
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
@@ -443,10 +446,10 @@ struct ReaderSettingsPanelView: View {
   private var askAiTile: some View {
     RoundIconTile(
       title: "Ask AI",
-      systemImage: "sparkles",
+      systemImage: "brain",
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
-      isEnabled: false,
+      isEnabled: true,
       action: {}
     )
   }
@@ -557,7 +560,7 @@ struct ReaderSettingsPanelView: View {
       isSelected: false,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
-      isEnabled: false,
+      isEnabled: true,
       action: {}
     )
   }
@@ -568,7 +571,7 @@ struct ReaderSettingsPanelView: View {
   private var lockTile: some View {
     RoundToggleTile(
       title: "Lock",
-      systemImage: isLocked ? "lock.fill" : "lock.open",
+      systemImage: isLocked ? "lock.rotation" : "lock.rotation.open",
       isSelected: isLocked,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,

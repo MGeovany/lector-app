@@ -47,11 +47,12 @@ struct ReaderView: View {
     ZStack {
       Group {
         if settings.isPresented {
-          // TODO: Match reference backdrop for each theme's surfaceBackground
           if preferences.theme == .day {
             Color(red: 248.0 / 255.0, green: 248.0 / 255.0, blue: 248.0 / 255.0)
+          } else if preferences.theme == .night {
+            Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 10.0 / 255.0)
           } else {
-            Color(.systemGray5)
+            preferences.theme.surfaceBackground
           }
         } else {
           preferences.theme.surfaceBackground
@@ -107,25 +108,44 @@ struct ReaderView: View {
           }
           // Keep text size/width (no scaling), but add the floating card style.
           .padding(.top, settings.isPresented ? 14 : 0)
-          // .padding(.horizontal, settings.isPresented ? 14 : 0)
           .padding(.bottom, settings.isPresented ? settingsGap : 0)
           .background {
             RoundedRectangle(
               cornerRadius: settings.isPresented ? 28 : 0,
               style: .continuous
             )
-            .fill(settings.isPresented ? Color.white : Color.clear)
+            .fill(settings.isPresented ? preferences.theme.surfaceBackground : Color.clear)
           }
           .clipShape(
             RoundedRectangle(
               cornerRadius: settings.isPresented ? 28 : 0,
-              style: .continuous
+              style: .continuous,
             )
           )
+          .overlay {
+            if settings.isPresented {
+              RoundedRectangle(
+                cornerRadius: 28,
+                style: .continuous
+              )
+              .stroke(
+                preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.08 : 0.12),
+                lineWidth: 1
+              )
+            }
+          }
           .shadow(
-            color: settings.isPresented && preferences.theme == .day
-              ? Color.black.opacity(0.08)
-              : Color.clear,
+            color: {
+              guard settings.isPresented else { return Color.clear }
+              switch preferences.theme {
+              case .day:
+                return Color.black.opacity(0.08)
+              case .night:
+                return Color.black.opacity(0.25)
+              case .amber:
+                return Color.black.opacity(0.12)
+              }
+            }(),
             radius: settings.isPresented ? 12 : 0,
             x: 0,
             y: 0
@@ -148,7 +168,7 @@ struct ReaderView: View {
             chrome.lastScrollOffsetY = scroll.offsetY
           }
           // Put the settings panel in an inset so it does NOT cover the document.
-          .safeAreaInset(edge: .bottom, spacing: 40) {
+          .safeAreaInset(edge: .bottom, spacing: 20) {
             ReaderSettingsPanelView(
               containerHeight: geo.size.height,
               isPresented: $settings.isPresented,

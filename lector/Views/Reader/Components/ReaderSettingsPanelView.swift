@@ -38,7 +38,7 @@ struct ReaderSettingsPanelView: View {
           }
         }
         .frame(maxWidth: .infinity)
-        .frame(height: containerHeight * 0.65)
+        .frame(height: containerHeight * 0.55)
 
         // .border(Color.red, width: 1)
 
@@ -47,7 +47,9 @@ struct ReaderSettingsPanelView: View {
           preferences.theme == .day
             ? Color(
               #colorLiteral(red: 0.9725490196, green: 0.9725490196, blue: 0.9725490196, alpha: 1.0))
-            : preferences.theme.surfaceBackground
+            : preferences.theme == .night
+              ? Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 10.0 / 255.0)
+              : preferences.theme.surfaceBackground
         )
         .clipShape(.rect(topLeadingRadius: 24, topTrailingRadius: 24))
         .offset(y: max(0, localDragOffset))
@@ -75,9 +77,7 @@ struct ReaderSettingsPanelView: View {
     VStack(spacing: 0) {
       Image(systemName: "chevron.down")
         .font(.system(size: 16, weight: .semibold))
-        .foregroundStyle(
-          Color(#colorLiteral(red: 207 / 255, green: 207 / 255, blue: 207 / 255, alpha: 1.0))
-        )
+        .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(0.40))
         .frame(maxWidth: .infinity)
         .frame(height: 20)
         .contentShape(Rectangle())
@@ -90,9 +90,7 @@ struct ReaderSettingsPanelView: View {
 
       Text(screen == .main ? "Reader Settings" : "Text Customize")
         .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(
-          Color(#colorLiteral(red: 207 / 255, green: 207 / 255, blue: 207 / 255, alpha: 1.0))
-        )
+        .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(0.40))
         .padding(.bottom, 20)
     }
     // .border(Color.red, width: 1)
@@ -489,23 +487,35 @@ struct ReaderSettingsPanelView: View {
     isSelected: Bool = false,
     action: @escaping () -> Void
   ) -> some View {
-    Button(action: action) {
+    // Adjust opacities based on theme for better contrast
+    let iconOpacity = isEnabled ? 0.90 : (preferences.theme == .day ? 0.25 : 0.50)
+    let backgroundOpacity =
+      isSelected
+      ? (preferences.theme == .day ? 0.10 : 0.15)
+      : (preferences.theme == .day ? 0.06 : 0.12)
+    let strokeOpacity =
+      isSelected
+      ? (preferences.theme == .day ? 0.18 : 0.25)
+      : (preferences.theme == .day ? 0.10 : 0.18)
+    let textOpacity = isEnabled ? 1.0 : (preferences.theme == .day ? 0.35 : 0.60)
+
+    return Button(action: action) {
       VStack(spacing: 8) {
         Image(systemName: system)
           .font(.system(size: 18, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(isEnabled ? 0.90 : 0.25))
+          .foregroundStyle(preferences.theme.surfaceText.opacity(iconOpacity))
           .frame(width: 54, height: 54)
           .background(
             Circle()
-              .fill(preferences.theme.surfaceText.opacity(isSelected ? 0.10 : 0.06))
+              .fill(preferences.theme.surfaceText.opacity(backgroundOpacity))
           )
           .overlay(
             Circle()
-              .stroke(preferences.theme.surfaceText.opacity(isSelected ? 0.18 : 0.10), lineWidth: 1)
+              .stroke(preferences.theme.surfaceText.opacity(strokeOpacity), lineWidth: 1)
           )
         Text(title)
           .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(isEnabled ? 1 : 0.35))
+          .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(textOpacity))
       }
       .frame(maxWidth: .infinity)
       .padding(.vertical, 10)
@@ -551,33 +561,56 @@ struct ReaderSettingsPanelView: View {
   }
 
   private func iconCircle(system: String, action: @escaping () -> Void) -> some View {
-    Button(action: action) {
+    // Adjust opacities for better contrast in dark/amber themes
+    let backgroundOpacity = preferences.theme == .day ? 0.06 : 0.12
+    let strokeOpacity = preferences.theme == .day ? 0.10 : 0.18
+
+    return Button(action: action) {
       Image(systemName: system)
         .font(.system(size: 12, weight: .bold))
         .foregroundStyle(preferences.theme.surfaceText.opacity(0.88))
         .frame(width: 32, height: 32)
         .background(
           Circle()
-            .fill(preferences.theme.surfaceText.opacity(0.06))
+            .fill(preferences.theme.surfaceText.opacity(backgroundOpacity))
         )
         .overlay(
           Circle()
-            .stroke(preferences.theme.surfaceText.opacity(0.10), lineWidth: 1)
+            .stroke(preferences.theme.surfaceText.opacity(strokeOpacity), lineWidth: 1)
         )
     }
     .buttonStyle(.plain)
   }
 
   private var cardBackground: some View {
-    RoundedRectangle(cornerRadius: 22, style: .continuous)
-      .fill(preferences.theme == .night ? Color.white.opacity(0.06) : Color.white.opacity(0.92))
+    let fillColor: Color = {
+      switch preferences.theme {
+      case .day:
+        return Color.white.opacity(0.92)
+      case .night:
+        return Color.white.opacity(0.08)
+      case .amber:
+        return Color.white.opacity(0.10)
+      }
+    }()
+
+    return RoundedRectangle(cornerRadius: 22, style: .continuous)
+      .fill(fillColor)
   }
 
   private var cardStroke: some View {
-    RoundedRectangle(cornerRadius: 22, style: .continuous)
-      .stroke(
-        preferences.theme == .night ? Color.white.opacity(0.10) : Color.black.opacity(0.08),
-        lineWidth: 1
-      )
+    let strokeColor: Color = {
+      switch preferences.theme {
+      case .day:
+        return Color.black.opacity(0.08)
+      case .night:
+        return Color.white.opacity(0.15)
+      case .amber:
+        return Color.white.opacity(0.18)
+      }
+    }()
+
+    return RoundedRectangle(cornerRadius: 22, style: .continuous)
+      .stroke(strokeColor, lineWidth: 1)
   }
 }

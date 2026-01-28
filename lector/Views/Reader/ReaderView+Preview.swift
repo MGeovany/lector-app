@@ -3,7 +3,7 @@ import SwiftUI
 @MainActor
 private func makeReaderPreviewPreferences() -> PreferencesViewModel {
   let prefs = PreferencesViewModel()
-    prefs.theme = .day
+  prefs.theme = .day
   prefs.font = .georgia
   prefs.fontSize = 18
   prefs.lineSpacing = 1.15
@@ -26,17 +26,17 @@ private func makeReaderPreviewPreferences() -> PreferencesViewModel {
     Fin.Capítulo 2 — Otra página de prueba Esta segunda sección existe para asegurar que el preview genere múltiples páginas y podamos probar navegación, search, y estilos en un bloque más largo.
 
     Un texto más largo ayuda a detectar cortes raros, saltos de línea inesperados, y problemas de layout. También permite probar la búsqueda dentro del libro con varias coincidencias.
-    
-    
-    Esta segunda sección existe para asegurar que el preview genere múltiples páginas y podamos probar navegación, search, y estilos en un bloque más largo.
 
-    Un texto más largo ayuda a detectar cortes raros, saltos de línea inesperados, y problemas de layout. También permite probar la búsqueda dentro del libro con varias coincidencias.
 
     Esta segunda sección existe para asegurar que el preview genere múltiples páginas y podamos probar navegación, search, y estilos en un bloque más largo.
 
     Un texto más largo ayuda a detectar cortes raros, saltos de línea inesperados, y problemas de layout. También permite probar la búsqueda dentro del libro con varias coincidencias.
 
-    
+    Esta segunda sección existe para asegurar que el preview genere múltiples páginas y podamos probar navegación, search, y estilos en un bloque más largo.
+
+    Un texto más largo ayuda a detectar cortes raros, saltos de línea inesperados, y problemas de layout. También permite probar la búsqueda dentro del libro con varias coincidencias.
+
+
     Esta segunda sección existe para asegurar que el preview genere múltiples páginas y podamos probar navegación, search, y estilos en un bloque más largo.
 
     Un texto más largo ayuda a detectar cortes raros, saltos de línea inesperados, y problemas de layout. También permite probar la búsqueda dentro del libro con varias coincidencias.

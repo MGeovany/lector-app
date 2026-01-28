@@ -131,6 +131,7 @@ struct ReaderSettingsPanelView: View {
 
   private var mainSettings: some View {
     VStack(spacing: 14) {
+      // Row 1: Theme pill + Voice — equal horizontal space, content centered
       HStack(spacing: 12) {
         themeBar
           .frame(maxWidth: .infinity)
@@ -141,12 +142,14 @@ struct ReaderSettingsPanelView: View {
           isEnabled: false,
           action: {}
         )
-        .frame(width: 92)
+        .frame(maxWidth: .infinity, alignment: .center)
       }
 
+      // Row 2: Text card + Search/Ask AI — equal horizontal space, content centered
       HStack(spacing: 12) {
         textCustomizeCard
           .frame(width: 150, height: 150)
+          .frame(maxWidth: .infinity, alignment: .center)
 
         VStack(spacing: 12) {
           circleAction(
@@ -170,7 +173,7 @@ struct ReaderSettingsPanelView: View {
             action: {}
           )
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .center)
       }
 
       HStack(spacing: 12) {
@@ -209,54 +212,100 @@ struct ReaderSettingsPanelView: View {
   }
 
   private var themeBar: some View {
-    VStack(alignment: .leading, spacing: 10) {
+    VStack(spacing: 0) {
+      // Pill-shaped bar with theme indicators
+      ZStack {
+        // Background bar
+        RoundedRectangle(cornerRadius: 99, style: .continuous)
+          .fill(preferences.theme.surfaceText.opacity(0.06))
+          .frame(height: 50)
+
+        // Theme indicators - space-between alignment
+        HStack(spacing: 0) {
+          // Light theme
+          themeIndicator(theme: .day)
+
+          Spacer(minLength: 0)
+
+          // Amber theme
+          themeIndicator(theme: .amber)
+
+          Spacer(minLength: 0)
+
+          // Dark theme
+          themeIndicator(theme: .night)
+        }
+        .padding(.horizontal, 20)
+      }
+      .frame(height: 50)
+      .frame(maxWidth: .infinity)
+
+      // "Theme" label centered below
       Text("Theme")
         .font(.system(size: 12, weight: .semibold))
-        .foregroundStyle(preferences.theme.surfaceSecondaryText)
-
-      HStack(spacing: 10) {
-        themeDot(title: "Light", theme: .day)
-        themeDot(title: "Dark", theme: .night)
-        themeDot(title: "Amber", theme: .amber)
-      }
+        .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(0.40))
     }
-    .padding(14)
-    .background(cardBackground)
-    .overlay(cardStroke)
   }
 
-  private func themeDot(title: String, theme: ReadingTheme) -> some View {
+  private func themeIndicator(theme: ReadingTheme) -> some View {
     let isSelected = preferences.theme == theme
+
+    // Color for each theme
+    let themeColor: Color = {
+      switch theme {
+      case .day:
+        return Color.white
+      case .night:
+        return Color(red: 0.06, green: 0.06, blue: 0.08)
+      case .amber:
+        return Color(red: 0.98, green: 0.93, blue: 0.74)
+      }
+    }()
+
     return Button {
-      withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+      withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
         preferences.theme = theme
       }
     } label: {
-      VStack(spacing: 6) {
+      if isSelected {
+        // Selected: large white circle with shadow and inner gray circle
+        ZStack {
+          Circle()
+            .fill(
+              preferences.theme == .night || preferences.theme == .amber
+                ? preferences.theme.surfaceText.opacity(0.15) : Color.white
+            )
+            .frame(width: 40, height: 40)
+
+          Circle()
+            .stroke(Color.white, lineWidth: 0)
+            .frame(width: 44, height: 44)
+
+          // Inner gray circle
+          Circle()
+            .fill(themeColor)
+            .frame(width: 16, height: 16)
+            .overlay(
+              Circle()
+                .stroke(preferences.theme.surfaceText.opacity(0.15), lineWidth: 1)
+            )
+        }
+        .padding(5)
+        .transition(.scale(scale: 0.8).combined(with: .opacity))
+      } else {
+        // Unselected: small solid color circle with border
         Circle()
-          .fill(isSelected ? preferences.theme.accent : preferences.theme.surfaceText.opacity(0.18))
-          .frame(width: 10, height: 10)
-        Text(title)
-          .font(.system(size: 11, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(isSelected ? 0.92 : 0.65))
-      }
-      .frame(maxWidth: .infinity)
-      .padding(.vertical, 8)
-      .background(
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-          .fill(preferences.theme.surfaceText.opacity(isSelected ? 0.08 : 0.04))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: 16, style: .continuous)
-          .stroke(
-            isSelected
-              ? preferences.theme.accent.opacity(0.35)
-              : preferences.theme.surfaceText.opacity(0.06),
-            lineWidth: 1
+          .fill(themeColor)
+          .frame(width: 16, height: 16)
+          .overlay(
+            Circle()
+              .stroke(preferences.theme.surfaceText.opacity(0.15), lineWidth: 1)
           )
-      )
+          .transition(.scale(scale: 0.9).combined(with: .opacity))
+      }
     }
     .buttonStyle(.plain)
+    .animation(.spring(response: 0.3, dampingFraction: 0.75), value: isSelected)
   }
 
   private var textCustomizeCard: some View {
@@ -504,7 +553,7 @@ struct ReaderSettingsPanelView: View {
         Image(systemName: system)
           .font(.system(size: 18, weight: .semibold))
           .foregroundStyle(preferences.theme.surfaceText.opacity(iconOpacity))
-          .frame(width: 54, height: 54)
+          .frame(width: 44, height: 44)
           .background(
             Circle()
               .fill(preferences.theme.surfaceText.opacity(backgroundOpacity))
@@ -519,8 +568,6 @@ struct ReaderSettingsPanelView: View {
       }
       .frame(maxWidth: .infinity)
       .padding(.vertical, 10)
-      .background(cardBackground)
-      .overlay(cardStroke)
     }
     .buttonStyle(.plain)
     .disabled(!isEnabled)

@@ -84,40 +84,54 @@ enum ReadingTextAlignment: String, CaseIterable, Identifiable {
   case justify
 
   var id: String { rawValue }
+
+  var title: String {
+    switch self {
+    case .default: return "Default"
+    case .justify: return "Justify"
+    }
+  }
+
+  var subtitle: String {
+    switch self {
+    case .default: return "Text lines up on the left"
+    case .justify: return "Text spreads evenly"
+    }
+  }
 }
 
 enum ReadingFont: String, CaseIterable, Identifiable {
   case system
+  case baskerville
   case georgia
   case palatino
   case avenir
   case menlo
   case iowan
-  case baskerville
 
   var id: String { rawValue }
 
   var title: String {
     switch self {
     case .system: return "System"
+    case .baskerville: return "Baskerville"
     case .georgia: return "Georgia"
     case .palatino: return "Palatino"
     case .avenir: return "Avenir"
     case .menlo: return "Menlo"
     case .iowan: return "Iowan"
-    case .baskerville: return "Baskerville"
     }
   }
 
   var subtitle: String {
     switch self {
     case .system: return "Balanced"
+    case .baskerville: return "Elegant"
     case .georgia: return "Serif"
     case .palatino: return "Bookish"
     case .avenir: return "Modern"
     case .menlo: return "Mono"
     case .iowan: return "Classic"
-    case .baskerville: return "Elegant"
     }
   }
 

@@ -47,7 +47,14 @@ struct ReaderSettingsPanelSheet: View {
               fontPage: $fontPage
             )
           case .textCustomize:
-            ReaderSettingsTextCustomizeSettingsView(screen: $screen)
+            ReaderSettingsTextCustomizeSettingsView(
+              screen: $screen,
+              onBack: {
+                withAnimation(.spring(response: 0.28, dampingFraction: 0.90)) {
+                  screen = .main
+                }
+              }
+            )
           }
         }
         .padding(.horizontal, 20)

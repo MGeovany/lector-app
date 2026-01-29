@@ -10,6 +10,10 @@ struct ReaderSettingsMainSettingsView: View {
   @Binding var screen: ReaderSettingsPanelScreen
   @Binding var fontPage: Int
 
+  @Binding var audiobookEnabled: Bool
+  let onEnableAudiobook: () -> Void
+  let onDisableAudiobook: () -> Void
+
   var body: some View {
     let gap: CGFloat = 15
 
@@ -102,13 +106,22 @@ struct ReaderSettingsMainSettingsView: View {
   }
 
   private var voiceTile: some View {
-    ReaderSettingsRoundIconTile(
+    ReaderSettingsRoundToggleTile(
       title: "Voice",
       systemImage: "waveform",
+      isSelected: audiobookEnabled,
       surfaceText: preferences.theme.surfaceText,
       secondaryText: preferences.theme.surfaceSecondaryText,
       isEnabled: true,
-      action: {}
+      action: {
+        let next = !audiobookEnabled
+        audiobookEnabled = next
+        if next {
+          onEnableAudiobook()
+        } else {
+          onDisableAudiobook()
+        }
+      }
     )
   }
 

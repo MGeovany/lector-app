@@ -10,6 +10,10 @@ struct ReaderSettingsPanelView: View {
   @Binding var searchVisible: Bool
   @Binding var searchQuery: String
 
+  @Binding var audiobookEnabled: Bool
+  let onEnableAudiobook: () -> Void
+  let onDisableAudiobook: () -> Void
+
   @State private var localDragOffset: CGFloat = 0
   @State private var screen: ReaderSettingsPanelScreen = .main
   @State private var fontPage: Int = 0
@@ -26,7 +30,10 @@ struct ReaderSettingsPanelView: View {
           searchQuery: $searchQuery,
           localDragOffset: $localDragOffset,
           screen: $screen,
-          fontPage: $fontPage
+          fontPage: $fontPage,
+          audiobookEnabled: $audiobookEnabled,
+          onEnableAudiobook: onEnableAudiobook,
+          onDisableAudiobook: onDisableAudiobook
         )
         .environmentObject(preferences)
       }

@@ -10,12 +10,17 @@ struct ReaderView: View {
   let initialText: String?
 
   @StateObject private var viewModel = ReaderViewModel()
+  @StateObject private var audiobook = ReaderAudiobookViewModel()
 
   @State private var search = ReaderSearchState()
   @State private var highlight = ReaderHighlightState()
   @State private var settings = ReaderSettingsState()
   @State private var chrome = ReaderChromeState()
   @State private var scroll = ReaderScrollState()
+
+  @State private var audiobookEnabled: Bool = false
+  @State private var audiobookScrollToIndex: Int? = nil
+  @State private var audiobookScrollToToken: Int = 0
 
   @State private var isDismissing: Bool = false
   @State private var didStartLoading: Bool = false
@@ -101,10 +106,23 @@ struct ReaderView: View {
             },
             onPagedProgressChange: { page, total in
               onProgressChange?(page, total, nil)
-            }
+            },
+            scrollToPageIndex: $audiobookScrollToIndex,
+            scrollToPageToken: $audiobookScrollToToken
           )
           .onChange(of: geo.size, initial: true) { _, newSize in
             startLoadingIfNeeded(container: newSize)
+          }
+          .onChange(of: viewModel.pages) { _, newPages in
+            audiobook.updatePages(newPages)
+          }
+          .onChange(of: viewModel.currentIndex) { _, idx in
+            if audiobookEnabled {
+              audiobook.userDidNavigate(to: idx)
+              if shouldUseContinuousScroll {
+                requestScrollToPage(idx)
+              }
+            }
           }
           // Keep text size/width (no scaling), but add the floating card style.
           .padding(.top, settings.isPresented ? 14 : 0)
@@ -168,6 +186,39 @@ struct ReaderView: View {
             chrome.lastScrollOffsetY = scroll.offsetY
           }
           // Put the settings panel in an inset so it does NOT cover the document.
+          .safeAreaInset(edge: .bottom, spacing: 12) {
+            if audiobookEnabled, !audiobook.isConverting, !settings.isPresented {
+              let total = max(1, viewModel.pages.count)
+              let idx = min(max(0, audiobook.currentPageIndex), max(0, total - 1))
+              let overall = min(
+                1.0, max(0.0, (Double(idx) + audiobook.pageProgress) / Double(total)))
+
+              ReaderAudiobookControlsView(
+                isPlaying: audiobook.isPlaying,
+                progress: overall,
+                pageLabel: "\(idx + 1) of \(total)",
+                onPreviousPage: {
+                  audiobook.previousPage()
+                },
+                onBack5: {
+                  audiobook.skipBackward5Seconds()
+                },
+                onPlayPause: {
+                  audiobook.togglePlayPause()
+                },
+                onForward5: {
+                  audiobook.skipForward5Seconds()
+                },
+                onNextPage: {
+                  audiobook.nextPage()
+                }
+              )
+              .environmentObject(preferences)
+              .padding(.horizontal, 12)
+              .padding(.bottom, 6)
+              .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+          }
           .safeAreaInset(edge: .bottom, spacing: 20) {
             ReaderSettingsPanelView(
               containerHeight: geo.size.height,
@@ -175,12 +226,15 @@ struct ReaderView: View {
               dragOffset: $settings.dragOffset,
               isLocked: $settings.isLocked,
               searchVisible: $search.isVisible,
-              searchQuery: $search.query
+              searchQuery: $search.query,
+              audiobookEnabled: $audiobookEnabled,
+              onEnableAudiobook: enableAudiobook,
+              onDisableAudiobook: disableAudiobook
             )
           }
         }
 
-        if !shouldUseContinuousScroll && !settings.isPresented {
+        if !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
           ReaderBottomPagerView(
             currentIndex: viewModel.currentIndex,
             totalPages: viewModel.pages.count,
@@ -216,6 +270,12 @@ struct ReaderView: View {
         )
         .environmentObject(preferences)
         .transition(.opacity.combined(with: .scale(scale: 0.95)))
+      }
+    }
+    .overlay {
+      if audiobook.isConverting {
+        ReaderAudiobookConvertingOverlayView()
+          .environmentObject(preferences)
       }
     }
     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: highlight.isPresented)
@@ -257,6 +317,20 @@ struct ReaderView: View {
         chrome.isVisible = false
       }
     }
+    .onAppear {
+      audiobook.setOnRequestPageIndexChange { idx in
+        DispatchQueue.main.async {
+          viewModel.currentIndex = min(max(0, idx), max(0, viewModel.pages.count - 1))
+          if shouldUseContinuousScroll {
+            requestScrollToPage(viewModel.currentIndex)
+          }
+        }
+      }
+      audiobook.updatePages(viewModel.pages)
+    }
+    .onDisappear {
+      disableAudiobook()
+    }
   }
 
   private var readerStatusBarScheme: ColorScheme {
@@ -277,6 +351,42 @@ struct ReaderView: View {
     DispatchQueue.main.async {
       dismiss()
     }
+  }
+
+  private func enableAudiobook() {
+    withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) {
+      settings.isPresented = false
+    }
+
+    audiobookEnabled = true
+    audiobook.updatePages(viewModel.pages)
+
+    let startIndex: Int = {
+      if shouldUseContinuousScroll {
+        let total = max(1, viewModel.pages.count)
+        let idx = Int(round(scroll.progress * Double(max(0, total - 1))))
+        return min(max(0, idx), max(0, total - 1))
+      }
+      return viewModel.currentIndex
+    }()
+
+    if shouldUseContinuousScroll {
+      requestScrollToPage(startIndex)
+    }
+    audiobook.enable(startingAt: startIndex)
+  }
+
+  private func disableAudiobook() {
+    withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) {
+      settings.isPresented = false
+    }
+    audiobookEnabled = false
+    audiobook.disable()
+  }
+
+  private func requestScrollToPage(_ idx: Int) {
+    audiobookScrollToIndex = idx
+    audiobookScrollToToken &+= 1
   }
 
   private func startLoadingIfNeeded(container size: CGSize) {

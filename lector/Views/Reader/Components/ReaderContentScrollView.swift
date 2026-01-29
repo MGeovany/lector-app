@@ -31,6 +31,10 @@ struct ReaderContentScrollView: View {
   let onShareSelection: (String, Int?, Double?) -> Void
   let onPagedProgressChange: (Int, Int) -> Void
 
+  // External scroll requests (used by audiobook sync in continuous mode)
+  @Binding var scrollToPageIndex: Int?
+  @Binding var scrollToPageToken: Int
+
   private let topAnchorID: String = "readerTop"
   private let scrollSpaceName: String = "readerScrollSpace"
 
@@ -153,6 +157,15 @@ struct ReaderContentScrollView: View {
         onPagedProgressChange(newValue + 1, max(1, viewModel.pages.count))
         withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
           proxy.scrollTo(topAnchorID, anchor: .top)
+        }
+      }
+
+      .onChange(of: scrollToPageToken) { _, _ in
+        guard shouldUseContinuousScroll else { return }
+        guard let idx = scrollToPageIndex else { return }
+        guard viewModel.pages.indices.contains(idx) else { return }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
+          proxy.scrollTo("page-\(idx)", anchor: .top)
         }
       }
     }

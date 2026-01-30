@@ -119,4 +119,6 @@ enum PreferencesKeys {
   static let readingTextAlignment = "preferences.readingTextAlignment"
   static let continuousScrollForShortDocs = "preferences.continuousScrollForShortDocs"
   static let readingBrightness = "preferences.readingBrightness"
+  static let readingShowHighlightsInText = "preferences.readingShowHighlightsInText"
+  static let readingHighlightColor = "preferences.readingHighlightColor"
 }

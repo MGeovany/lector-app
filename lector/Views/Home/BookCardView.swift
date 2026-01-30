@@ -29,11 +29,10 @@ struct BookCardView: View {
       return book.remoteID == nil && book.author == "Queued"
     }()
 
-    let tagText =
+    let tagText: String? =
       (book.tags.first?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap {
         $0.isEmpty ? nil : $0
       }
-      ?? "Book"
 
     VStack(alignment: .leading, spacing: 14) {
       HStack(alignment: .top, spacing: 14) {
@@ -41,17 +40,19 @@ struct BookCardView: View {
 
         VStack(alignment: .leading, spacing: 6) {
           HStack(spacing: 8) {
-            Text(tagText)
-              .font(.parkinsans(size: 12))
-              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.65) : .secondary)
-              .padding(.horizontal, 8)
-              .padding(.vertical, 4)
-              .background(
-                Capsule(style: .continuous)
-                  .fill(
-                    colorScheme == .dark
-                      ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
-              )
+            if let tagText {
+              Text(tagText)
+                .font(.parkinsans(size: 12))
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.65) : .secondary)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                  Capsule(style: .continuous)
+                    .fill(
+                      colorScheme == .dark
+                        ? Color.white.opacity(0.10) : Color(.secondarySystemBackground))
+                )
+            }
 
             if isPendingUpload {
               offlineBadge(text: "Queued", systemImage: "clock")

@@ -7,12 +7,20 @@ struct ReaderTopBarView: View {
   @Binding var showReaderSettings: Bool
   let onBack: () -> Void
 
+  private var isDarkTheme: Bool {
+    preferences.theme == .night || preferences.theme == .amber
+  }
+
+  private var headerIconOpacity: Double {
+    isDarkTheme ? 0.96 : 0.88
+  }
+
   var body: some View {
     HStack(spacing: 10) {
       Button(action: onBack) {
         Image(systemName: "chevron.left")
           .font(.system(size: 15, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(0.90))
+          .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
           .padding(8)
       }
       .buttonStyle(.plain)
@@ -31,8 +39,7 @@ struct ReaderTopBarView: View {
             .resizable()
             .scaledToFit()
             .frame(width: 20, height: 20)
-            .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
-
+            .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Reader settings")
@@ -51,7 +58,7 @@ struct ReaderTopBarView: View {
         } label: {
           Image(systemName: preferences.theme.icon)
             .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
+            .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
             .padding(8)
             .symbolEffect(.bounce, value: preferences.theme)
         }

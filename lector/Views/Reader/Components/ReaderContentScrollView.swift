@@ -10,6 +10,7 @@ struct ReaderContentScrollView: View {
   let horizontalPadding: CGFloat
   let shouldUseContinuousScroll: Bool
   let showTopChrome: Bool
+  let highlightQuotes: [String]
 
   @Binding var showSearch: Bool
   @Binding var searchQuery: String
@@ -192,6 +193,10 @@ struct ReaderContentScrollView: View {
           lineSpacing: CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1)),
           textAlignment: preferences.textAlignment == .justify ? .justified : .natural,
           highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+          highlightQuotes: highlightQuotes,
+          showHighlightsInText: preferences.showHighlightsInText,
+          highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
+          highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
           clearSelectionToken: clearSelectionToken,
           onShareSelection: { selected in
             onShareSelection(selected, idx + 1, scrollProgress)
@@ -214,6 +219,10 @@ struct ReaderContentScrollView: View {
       lineSpacing: CGFloat(preferences.fontSize) * CGFloat(max(0, preferences.lineSpacing - 1)),
       textAlignment: preferences.textAlignment == .justify ? .justified : .natural,
       highlightQuery: searchQuery.isEmpty ? nil : searchQuery,
+      highlightQuotes: highlightQuotes,
+      showHighlightsInText: preferences.showHighlightsInText,
+      highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
+      highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
       clearSelectionToken: clearSelectionToken,
       onShareSelection: { selected in
         onShareSelection(selected, viewModel.currentIndex + 1, nil)

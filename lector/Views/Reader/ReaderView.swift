@@ -1,9 +1,13 @@
 import SwiftUI
 import UIKit
 
+/// Reader has two independent theme concepts:
+/// - **App theme** (Settings / Profile): `AppTheme` — light/dark for the whole app. Drives status bar when *not* in reader.
+/// - **Reader theme** (reader only): `ReadingTheme` — day/night/amber for the reading surface. Drives status bar *while* in reader.
 struct ReaderView: View {
   @Environment(\.dismiss) private var dismiss
   @EnvironmentObject private var preferences: PreferencesViewModel
+  @AppStorage(AppPreferenceKeys.theme) private var appThemeRawValue: String = AppTheme.dark.rawValue
 
   let book: Book
   var onProgressChange: ((Int, Int, Double?) -> Void)? = nil
@@ -41,6 +45,9 @@ struct ReaderView: View {
 
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let readingPositionService: ReadingPositionServicing = GoReadingPositionService()
+  private let highlightsService: HighlightsServicing = GoHighlightsService()
+
+  @State private var documentHighlights: [RemoteHighlight] = []
 
   private let shortDocContinuousScrollMaxPages: Int = 10
   private let horizontalPadding: CGFloat = 20
@@ -101,6 +108,7 @@ struct ReaderView: View {
             horizontalPadding: horizontalPadding,
             shouldUseContinuousScroll: shouldUseContinuousScroll,
             showTopChrome: showEdges,
+            highlightQuotes: documentHighlights.map(\.quote),
             showSearch: $search.isVisible,
             searchQuery: $search.query,
             clearSelectionToken: $highlight.clearSelectionToken,
@@ -320,6 +328,7 @@ struct ReaderView: View {
     .toolbar(.hidden, for: .tabBar)
     .toolbar(.hidden, for: .navigationBar)
     .preferredColorScheme(readerStatusBarScheme)
+    .environment(\.colorScheme, readerStatusBarScheme)
     .navigationBarBackButtonHidden(true)
     .preference(key: TabBarHiddenPreferenceKey.self, value: !isDismissing)
     .overlay {
@@ -334,6 +343,13 @@ struct ReaderView: View {
           onDismiss: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
               highlight.dismiss()
+            }
+            if let id = book.remoteID, !id.isEmpty {
+              Task {
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                documentHighlights =
+                  (try? await highlightsService.listHighlights(documentID: id)) ?? []
+              }
             }
           }
         )
@@ -396,6 +412,16 @@ struct ReaderView: View {
     }
     .onAppear {
       networkMonitor.startIfNeeded()
+      #if DEBUG
+      print("[ReaderView] onAppear readerStatusBarScheme=\(readerStatusBarScheme) appThemeColorScheme=\(appThemeColorScheme)")
+      #endif
+      applyReaderStatusBarStyle(readerStatusBarScheme)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+        applyReaderStatusBarStyle(readerStatusBarScheme)
+        #if DEBUG
+        print("[ReaderView] onAppear delayed re-apply readerStatusBarScheme=\(readerStatusBarScheme)")
+        #endif
+      }
       if let id = book.remoteID, !id.isEmpty {
         offlineEnabled = OfflinePinStore.isPinned(remoteID: id)
         refreshOfflineSubtitle(remoteID: id)
@@ -408,6 +434,9 @@ struct ReaderView: View {
             refreshOfflineSubtitle(remoteID: id)
           }
         }
+        Task {
+          documentHighlights = (try? await highlightsService.listHighlights(documentID: id)) ?? []
+        }
       }
       audiobook.setOnRequestPageIndexChange { idx in
         DispatchQueue.main.async {
@@ -419,13 +448,61 @@ struct ReaderView: View {
       }
       audiobook.updatePages(viewModel.pages)
     }
+    .onChange(of: readerStatusBarScheme, initial: true) { _, newScheme in
+      #if DEBUG
+      print("[ReaderView] onChange(readerStatusBarScheme) initial/change -> newScheme=\(newScheme)")
+      #endif
+      applyReaderStatusBarStyle(newScheme)
+    }
     .onDisappear {
+      #if DEBUG
+      print("[ReaderView] onDisappear restoring appThemeColorScheme=\(appThemeColorScheme)")
+      #endif
+      applyReaderStatusBarStyle(appThemeColorScheme)
       disableAudiobook()
       cancelFocusAutoHide()
       stopOfflineMonitor()
     }
   }
 
+  private var appThemeColorScheme: ColorScheme {
+    AppTheme(rawValue: appThemeRawValue)?.colorScheme ?? .dark
+  }
+
+  private func applyReaderStatusBarStyle(_ scheme: ColorScheme?) {
+    let uiStyle: UIUserInterfaceStyle = scheme.map { s in
+      switch s {
+      case .light: return .light
+      case .dark: return .dark
+      @unknown default: return .unspecified
+      }
+    } ?? .unspecified
+
+    let scenes = UIApplication.shared.connectedScenes
+      .compactMap { $0 as? UIWindowScene }
+    let windows = scenes.flatMap(\.windows)
+    let keyWindow = windows.first(where: \.isKeyWindow)
+
+    #if DEBUG
+    let readerTheme = preferences.theme
+    let appTheme = AppTheme(rawValue: appThemeRawValue) ?? .dark
+    print("[ReaderView] applyReaderStatusBarStyle scheme=\(String(describing: scheme)) uiStyle=\(uiStyle.rawValue) readerTheme=\(readerTheme) appTheme=\(appTheme) windowsCount=\(windows.count) keyWindow=\(keyWindow != nil)")
+    #endif
+
+    guard let window = keyWindow ?? windows.first else {
+      #if DEBUG
+      print("[ReaderView] applyReaderStatusBarStyle FAILED: no window")
+      #endif
+      return
+    }
+    window.overrideUserInterfaceStyle = uiStyle
+    window.rootViewController?.overrideUserInterfaceStyle = uiStyle
+    #if DEBUG
+    print("[ReaderView] applyReaderStatusBarStyle SET window+rootVC.overrideUserInterfaceStyle=\(uiStyle.rawValue)")
+    #endif
+  }
+
+  /// Status bar style while in reader: follows *reader* theme (day → light bar, night/amber → dark bar).
   private var readerStatusBarScheme: ColorScheme {
     preferences.theme == .day ? .light : .dark
   }

@@ -11,6 +11,8 @@ struct ReadingPreferencesSnapshot: Equatable {
   var textAlignment: ReadingTextAlignment
   var continuousScrollForShortDocs: Bool
   var brightness: Double
+  var showHighlightsInText: Bool
+  var highlightColor: ReadingHighlightColor
 }
 
 protocol ReadingPreferencesStoring {
@@ -54,6 +56,14 @@ struct UserDefaultsReadingPreferencesStore: ReadingPreferencesStoring {
     let brightness =
       defaults.object(forKey: PreferencesKeys.readingBrightness) as? Double
       ?? ReadingPreferencesDefaults.brightness
+    let showHighlightsInText =
+      defaults.object(forKey: PreferencesKeys.readingShowHighlightsInText) as? Bool
+      ?? ReadingPreferencesDefaults.showHighlightsInText
+    let highlightColorRaw =
+      defaults.string(forKey: PreferencesKeys.readingHighlightColor)
+      ?? ReadingPreferencesDefaults.highlightColor.rawValue
+    let highlightColor =
+      ReadingHighlightColor(rawValue: highlightColorRaw) ?? ReadingPreferencesDefaults.highlightColor
 
     return ReadingPreferencesSnapshot(
       theme: theme,
@@ -62,7 +72,9 @@ struct UserDefaultsReadingPreferencesStore: ReadingPreferencesStoring {
       lineSpacing: lineSpacing,
       textAlignment: textAlignment,
       continuousScrollForShortDocs: continuousScrollForShortDocs,
-      brightness: brightness
+      brightness: brightness,
+      showHighlightsInText: showHighlightsInText,
+      highlightColor: highlightColor
     )
   }
 
@@ -75,6 +87,8 @@ struct UserDefaultsReadingPreferencesStore: ReadingPreferencesStoring {
     defaults.set(
       snapshot.continuousScrollForShortDocs, forKey: PreferencesKeys.continuousScrollForShortDocs)
     defaults.set(snapshot.brightness, forKey: PreferencesKeys.readingBrightness)
+    defaults.set(snapshot.showHighlightsInText, forKey: PreferencesKeys.readingShowHighlightsInText)
+    defaults.set(snapshot.highlightColor.rawValue, forKey: PreferencesKeys.readingHighlightColor)
   }
 }
 
@@ -89,6 +103,8 @@ final class PreferencesViewModel: ObservableObject {
   @Published var textAlignment: ReadingTextAlignment
   @Published var continuousScrollForShortDocs: Bool
   @Published var brightness: Double
+  @Published var showHighlightsInText: Bool
+  @Published var highlightColor: ReadingHighlightColor
 
   private let store: ReadingPreferencesStoring
   private var saved: ReadingPreferencesSnapshot
@@ -108,6 +124,8 @@ final class PreferencesViewModel: ObservableObject {
     self.textAlignment = snapshot.textAlignment
     self.continuousScrollForShortDocs = snapshot.continuousScrollForShortDocs
     self.brightness = snapshot.brightness
+    self.showHighlightsInText = snapshot.showHighlightsInText
+    self.highlightColor = snapshot.highlightColor
 
     self.saved = snapshot
   }
@@ -129,6 +147,8 @@ final class PreferencesViewModel: ObservableObject {
     textAlignment = ReadingPreferencesDefaults.textAlignment
     continuousScrollForShortDocs = ReadingPreferencesDefaults.continuousScrollForShortDocs
     brightness = ReadingPreferencesDefaults.brightness
+    showHighlightsInText = ReadingPreferencesDefaults.showHighlightsInText
+    highlightColor = ReadingPreferencesDefaults.highlightColor
     save()
   }
 
@@ -140,7 +160,9 @@ final class PreferencesViewModel: ObservableObject {
       lineSpacing: lineSpacing,
       textAlignment: textAlignment,
       continuousScrollForShortDocs: continuousScrollForShortDocs,
-      brightness: brightness
+      brightness: brightness,
+      showHighlightsInText: showHighlightsInText,
+      highlightColor: highlightColor
     )
   }
 }

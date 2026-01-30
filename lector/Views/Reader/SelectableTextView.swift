@@ -8,6 +8,10 @@ struct SelectableTextView: UIViewRepresentable {
   let lineSpacing: CGFloat
   let textAlignment: NSTextAlignment
   let highlightQuery: String?
+  let highlightQuotes: [String]
+  let showHighlightsInText: Bool
+  let highlightColor: UIColor
+  let highlightOpacity: CGFloat
   let clearSelectionToken: Int
   let onShareSelection: (String) -> Void
 
@@ -107,20 +111,32 @@ struct SelectableTextView: UIViewRepresentable {
       ]
     )
 
-    if let highlightQuery,
-      !highlightQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    {
-      let query = highlightQuery.lowercased()
-      let full = text.lowercased() as NSString
-      var range = NSRange(location: 0, length: full.length)
-      while true {
-        let found = full.range(of: query, options: [], range: range)
-        if found.location == NSNotFound { break }
-        attr.addAttribute(
-          .backgroundColor, value: UIColor.systemYellow.withAlphaComponent(0.35), range: found)
-        let nextLoc = found.location + max(1, found.length)
-        if nextLoc >= full.length { break }
-        range = NSRange(location: nextLoc, length: full.length - nextLoc)
+    if showHighlightsInText {
+      let bgColor = highlightColor.withAlphaComponent(highlightOpacity)
+      let full = text as NSString
+
+      for quote in highlightQuotes {
+        let trimmed = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { continue }
+        for range in Self.rangesOfQuote(trimmed, in: full) {
+          attr.addAttribute(.backgroundColor, value: bgColor, range: range)
+        }
+      }
+
+      if let highlightQuery,
+        !highlightQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      {
+        let query = highlightQuery.lowercased()
+        let fullLower = text.lowercased() as NSString
+        var range = NSRange(location: 0, length: fullLower.length)
+        while true {
+          let found = fullLower.range(of: query, options: [], range: range)
+          if found.location == NSNotFound { break }
+          attr.addAttribute(.backgroundColor, value: highlightColor.withAlphaComponent(highlightOpacity), range: found)
+          let nextLoc = found.location + max(1, found.length)
+          if nextLoc >= fullLower.length { break }
+          range = NSRange(location: nextLoc, length: fullLower.length - nextLoc)
+        }
       }
     }
 
@@ -152,6 +168,80 @@ struct SelectableTextView: UIViewRepresentable {
         "[SelectableTextView] update bounds=\(uiView.bounds.size) attrLen=\(uiView.attributedText.length) scrollEnabled=\(uiView.isScrollEnabled)"
       )
     }
+  }
+
+  /// Finds all ranges of `quote` in `full` using case/diacritic-insensitive match, flexible whitespace regex, or longest substring when quote spans pages.
+  private static func rangesOfQuote(_ quote: String, in full: NSString) -> [NSRange] {
+    guard !quote.isEmpty, full.length > 0 else { return [] }
+    let trimmed = quote.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return [] }
+    var out = rangesOfQuoteExact(trimmed, in: full)
+    if !out.isEmpty { return out }
+    out = rangesOfQuoteFlexibleWhitespace(trimmed, in: full)
+    if !out.isEmpty { return out }
+    return rangesOfQuoteLongestSubstring(trimmed, in: full)
+  }
+
+  private static func rangesOfQuoteExact(_ quote: String, in full: NSString) -> [NSRange] {
+    var out: [NSRange] = []
+    let opts: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+    var searchRange = NSRange(location: 0, length: full.length)
+    while searchRange.length > 0 {
+      let found = full.range(of: quote, options: opts, range: searchRange)
+      if found.location == NSNotFound { break }
+      out.append(found)
+      let nextLoc = found.location + max(1, found.length)
+      if nextLoc >= full.length { break }
+      searchRange = NSRange(location: nextLoc, length: full.length - nextLoc)
+    }
+    return out
+  }
+
+  private static func rangesOfQuoteFlexibleWhitespace(_ quote: String, in full: NSString) -> [NSRange] {
+    let collapsed = quote.replacingOccurrences(of: #"\s+"#, with: " ", options: .regularExpression)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !collapsed.isEmpty else { return [] }
+    let pattern = NSRegularExpression.escapedPattern(for: collapsed)
+      .replacingOccurrences(of: " ", with: "\\s+")
+    guard let regex = try? NSRegularExpression(pattern: pattern, options: .caseInsensitive) else { return [] }
+    var out: [NSRange] = []
+    let range = NSRange(location: 0, length: full.length)
+    regex.enumerateMatches(in: full as String, options: [], range: range) { match, _, _ in
+      guard let m = match else { return }
+      out.append(m.range)
+    }
+    return out
+  }
+
+  /// When the full quote spans pages, highlight the longest prefix or suffix of the quote that appears on this page.
+  private static func rangesOfQuoteLongestSubstring(_ quote: String, in full: NSString) -> [NSRange] {
+    let opts: NSString.CompareOptions = [.caseInsensitive, .diacriticInsensitive]
+    let words = quote.split(separator: " ", omittingEmptySubsequences: false)
+      .map(String.init)
+    guard !words.isEmpty else { return [] }
+    let maxWords = min(25, words.count)
+    func trySubstring(_ substring: String) -> [NSRange]? {
+      let t = substring.trimmingCharacters(in: .whitespacesAndNewlines)
+      guard t.count >= 2 else { return nil }
+      var out: [NSRange] = []
+      var searchRange = NSRange(location: 0, length: full.length)
+      while searchRange.length > 0 {
+        let found = full.range(of: t, options: opts, range: searchRange)
+        if found.location == NSNotFound { break }
+        out.append(found)
+        searchRange = NSRange(location: found.location + max(1, found.length), length: full.length - (found.location + max(1, found.length)))
+      }
+      return out.isEmpty ? nil : out
+    }
+    for len in (1 ... maxWords).reversed() {
+      let prefix = words.prefix(len).joined(separator: " ")
+      if let ranges = trySubstring(prefix) { return ranges }
+      if len < words.count {
+        let suffix = words.suffix(len).joined(separator: " ")
+        if let ranges = trySubstring(suffix) { return ranges }
+      }
+    }
+    return []
   }
 }
 

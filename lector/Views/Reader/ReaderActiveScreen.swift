@@ -1,10 +1,7 @@
 import UIKit
 
 enum ReaderActiveScreen {
-  // Intentionally no logging here (brightness is user-facing).
-
   static func screen() -> UIScreen? {
-    // Best-effort: pick the foreground-active scene's screen.
     let scenes = UIApplication.shared.connectedScenes
       .compactMap { $0 as? UIWindowScene }
 
@@ -28,7 +25,6 @@ enum ReaderActiveScreen {
     }
 
     add(screen())
-    // UIScreen.main is deprecated in iOS 26, but still useful as a fallback.
     add(UIScreen.main)
     for s in UIScreen.screens { add(s) }
     return out

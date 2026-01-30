@@ -1,7 +1,6 @@
 import SwiftUI
 import UIKit
 
-/// A UIKit-backed selectable text view that exposes a custom "Share" menu item for the current selection.
 struct SelectableTextView: UIViewRepresentable {
   let text: String
   let font: UIFont
@@ -23,18 +22,14 @@ struct SelectableTextView: UIViewRepresentable {
     uiView: ShareableSelectionTextView,
     context: Context
   ) -> CGSize {
-    // Use the proposed width, or fallback to the current bounds width, or a reasonable default
     let proposedWidth = proposal.width ?? (uiView.bounds.width > 0 ? uiView.bounds.width : 300)
     guard proposedWidth > 0 else { return CGSize(width: 0, height: 0) }
 
-    // Configure text container for full layout calculation
     uiView.textContainer.size = CGSize(width: proposedWidth, height: .greatestFiniteMagnitude)
     uiView.textContainer.widthTracksTextView = false
     uiView.textContainer.heightTracksTextView = false
 
-    // Ensure we have attributed text set
     if uiView.attributedText.length == 0 && !text.isEmpty {
-      // If text isn't set yet, create it temporarily for measurement
       let paragraph = NSMutableParagraphStyle()
       paragraph.lineSpacing = lineSpacing
       paragraph.alignment = textAlignment
@@ -50,10 +45,7 @@ struct SelectableTextView: UIViewRepresentable {
       uiView.attributedText = attr
     }
 
-    // Force layout to calculate the full height
     uiView.layoutManager.ensureLayout(for: uiView.textContainer)
-
-    // Calculate the actual height needed for all text
     let usedRect = uiView.layoutManager.usedRect(for: uiView.textContainer)
     let height = ceil(usedRect.height)
 
@@ -72,9 +64,6 @@ struct SelectableTextView: UIViewRepresentable {
     v.isEditable = false
     v.isSelectable = true
     v.isScrollEnabled = false
-    // UITextView is a UIScrollView subclass. When embedded inside a parent SwiftUI ScrollView,
-    // its pan recognizer can compete with the parent's scroll gesture and effectively "pin"
-    // scrolling on short documents. We'll bias gesture recognition to the parent ScrollView.
     v.backgroundColor = .clear
     v.textContainerInset = .zero
     v.textContainer.lineFragmentPadding = 0
@@ -82,7 +71,6 @@ struct SelectableTextView: UIViewRepresentable {
     v.textContainer.heightTracksTextView = false
     v.adjustsFontForContentSizeCategory = true
 
-    // Make the view expand vertically to fit content
     v.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
     v.setContentHuggingPriority(.defaultLow, for: .horizontal)
     v.setContentCompressionResistancePriority(.required, for: .vertical)
@@ -97,11 +85,8 @@ struct SelectableTextView: UIViewRepresentable {
 
   func updateUIView(_ uiView: ShareableSelectionTextView, context: Context) {
     uiView.onShareSelection = onShareSelection
-    // Prefer the parent SwiftUI ScrollView for vertical pans.
     uiView.lectorPreferParentScrollViewForPans(debug: Self.debugScrollLogs)
 
-    // If a parent (e.g. ReaderView) asks to clear selection (usually when showing a modal),
-    // remove the highlight + caret.
     if context.coordinator.lastClearSelectionToken != clearSelectionToken {
       context.coordinator.lastClearSelectionToken = clearSelectionToken
       uiView.selectedRange = NSRange(location: 0, length: 0)
@@ -139,8 +124,6 @@ struct SelectableTextView: UIViewRepresentable {
       }
     }
 
-    // Update when either the string OR styling changes (theme/font/spacing).
-    // Preserve selection when possible.
     if uiView.attributedText != attr {
       let currentSelection = uiView.selectedRange
       uiView.attributedText = attr
@@ -154,13 +137,11 @@ struct SelectableTextView: UIViewRepresentable {
       uiView.invalidateIntrinsicContentSize()
     }
 
-    // Configure text container for proper layout
     let containerWidth = max(1, uiView.bounds.width > 0 ? uiView.bounds.width : 300)
     uiView.textContainer.size = CGSize(width: containerWidth, height: .greatestFiniteMagnitude)
     uiView.textContainer.widthTracksTextView = false
     uiView.textContainer.heightTracksTextView = false
 
-    // Force layout update
     uiView.layoutManager.ensureLayout(for: uiView.textContainer)
     uiView.invalidateIntrinsicContentSize()
     uiView.setNeedsLayout()
@@ -192,14 +173,11 @@ extension UIView {
 
 extension UITextView {
   fileprivate func lectorPreferParentScrollViewForPans(debug: Bool) {
-    // Find the nearest ancestor scroll view (the SwiftUI ScrollView host).
     guard let parent = self.lectorNearestAncestorScrollView(excludingSelf: true) else {
       if debug { print("[SelectableTextView] no parent UIScrollView ancestor found") }
       return
     }
 
-    // Make our internal pan wait for the parent scroll view's pan. This preserves text selection
-    // (long-press/tap) while ensuring vertical drags scroll the document.
     panGestureRecognizer.require(toFail: parent.panGestureRecognizer)
     panGestureRecognizer.cancelsTouchesInView = false
 
@@ -218,8 +196,6 @@ final class ShareableSelectionTextView: UITextView {
 
   @available(iOS 16.0, *)
   override func editMenu(for textRange: UITextRange, suggestedActions: [UIMenuElement]) -> UIMenu? {
-    // This is the API used by the modern iOS 16+ selection "pill" menu.
-    // `buildMenu(with:)` won't be called for this UI.
     guard
       let selected = text(in: textRange)?
         .trimmingCharacters(in: .whitespacesAndNewlines),
@@ -232,18 +208,13 @@ final class ShareableSelectionTextView: UITextView {
       title: "Share highlight",
       image: UIImage(systemName: "square.and.arrow.up")
     ) { [weak self] _ in
-
-      // IMPORTANT: use the provided `textRange` content. By the time the action executes,
-      // `selectedTextRange` can already be cleared by the system menu.
       self?.onShareSelection?(selected)
     }
 
-    // Put our action at the front, keep the system actions after it.
     return UIMenu(children: [share] + suggestedActions)
   }
 
   override var intrinsicContentSize: CGSize {
-    // Calculate intrinsic size based on text content
     guard attributedText.length > 0 else {
       return CGSize(width: UIView.noIntrinsicMetric, height: 1)
     }
@@ -261,7 +232,6 @@ final class ShareableSelectionTextView: UITextView {
 
   override func layoutSubviews() {
     super.layoutSubviews()
-    // Invalidate intrinsic content size when bounds change
     if bounds.width > 0 {
       invalidateIntrinsicContentSize()
     }
@@ -270,9 +240,7 @@ final class ShareableSelectionTextView: UITextView {
   override func buildMenu(with builder: UIMenuBuilder) {
     super.buildMenu(with: builder)
 
-    // Only add share menu if there's a selection
     guard selectedRange.length > 0 else { return }
-    // Capture selection now; `selectedTextRange` can change after the menu is built.
     let selectedNow: String? = {
       guard let range = selectedTextRange, let selected = text(in: range) else { return nil }
       let trimmed = selected.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -287,13 +255,11 @@ final class ShareableSelectionTextView: UITextView {
       self?.onShareSelection?(selectedNow)
     }
 
-    // Insert the share menu at the start of the edit menu
     let menu = UIMenu(title: "", options: .displayInline, children: [share])
     builder.insertChild(menu, atStartOfMenu: .edit)
   }
 
   override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
-    // Ensure standard text selection actions work
     if action == #selector(copy(_:)) {
       return selectedRange.length > 0
     }
@@ -301,7 +267,6 @@ final class ShareableSelectionTextView: UITextView {
   }
 
   override func becomeFirstResponder() -> Bool {
-    // Ensure the view can become first responder for menu display
     return super.becomeFirstResponder()
   }
 

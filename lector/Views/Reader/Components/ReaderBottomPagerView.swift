@@ -41,8 +41,8 @@ struct ReaderBottomPagerView: View {
           .foregroundStyle(preferences.theme.surfaceText.opacity(0.90))
           .contentTransition(.numericText())
       }
-      .padding(.horizontal, 18)
-      .padding(.vertical, 10)
+      .padding(.horizontal, 16)
+      .padding(.vertical, 8)
       .background(
         Capsule(style: .continuous)
           .fill(preferences.theme.surfaceText.opacity(0.06))
@@ -64,7 +64,8 @@ struct ReaderBottomPagerView: View {
         Image(systemName: "chevron.right")
           .font(.system(size: 14, weight: .semibold))
           .foregroundStyle(
-            preferences.theme.surfaceText.opacity(currentIndex < max(0, totalPages - 1) ? 0.90 : 0.35)
+            preferences.theme.surfaceText.opacity(
+              currentIndex < max(0, totalPages - 1) ? 0.90 : 0.35)
           )
           .frame(width: 44, height: 44)
           .background(
@@ -81,8 +82,8 @@ struct ReaderBottomPagerView: View {
       .accessibilityLabel("Next page")
       .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in }.onEnded { _ in })
     }
-    .padding(.horizontal, 18)
-    .padding(.vertical, 14)
-    .padding(.bottom, 10)
+    .padding(.horizontal, 16)
+    .padding(.vertical, 0)
+    .padding(.bottom, 0)
   }
 }

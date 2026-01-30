@@ -81,17 +81,17 @@ struct ReaderView: View {
       .ignoresSafeArea()
 
       VStack(spacing: 0) {
-        ReaderCollapsibleTopBar(isVisible: showEdges, measuredHeight: $chrome.measuredHeight) {
-          ReaderTopBarView(
-            horizontalPadding: horizontalPadding,
-            showReaderSettings: $settings.isPresented,
-            onBack: handleBack
-          )
+        if showEdges {
+          ReaderCollapsibleTopBar(isVisible: true, measuredHeight: $chrome.measuredHeight) {
+            ReaderTopBarView(
+              horizontalPadding: horizontalPadding,
+              showReaderSettings: $settings.isPresented,
+              onBack: handleBack
+            )
+          }
         }
 
         GeometryReader { geo in
-          // Match ReaderSettingsPanelView's height (65% of available height).
-          // Avoid UIScreen.main (deprecated in iOS 26).
           let settingsGap: CGFloat = 16
 
           ReaderContentScrollView(
@@ -151,7 +151,6 @@ struct ReaderView: View {
                 let dx = value.translation.width
                 let dy = value.translation.height
 
-                // Only treat as a page-swipe when the gesture is primarily horizontal.
                 guard abs(dx) > max(24, abs(dy) * 1.35) else { return }
 
                 focusSwipeInFlight = true
@@ -182,7 +181,6 @@ struct ReaderView: View {
               }
             }
           }
-          // Keep text size/width (no scaling), but add the floating card style.
           .padding(.top, settings.isPresented ? 14 : 0)
           .padding(.bottom, settings.isPresented ? settingsGap : 0)
           .background {
@@ -242,7 +240,6 @@ struct ReaderView: View {
             }
             chrome.lastScrollOffsetY = scroll.offsetY
           }
-          // Put the settings panel in an inset so it does NOT cover the document.
           .safeAreaInset(edge: .bottom, spacing: 12) {
             if showEdges, audiobookEnabled, !audiobook.isConverting, !settings.isPresented {
               let total = max(1, viewModel.pages.count)
@@ -276,7 +273,7 @@ struct ReaderView: View {
               .transition(.move(edge: .bottom).combined(with: .opacity))
             }
           }
-          .safeAreaInset(edge: .bottom, spacing: 20) {
+          .safeAreaInset(edge: .bottom, spacing: 0) {
             if showEdges {
               ReaderSettingsPanelView(
                 containerHeight: geo.size.height,
@@ -308,7 +305,6 @@ struct ReaderView: View {
         }
       }
       .overlay {
-        // In-app brightness fallback (works even when system brightness is restricted)
         let b = min(1.0, max(0.0, preferences.brightness))
         let dim = min(0.78, max(0.0, (1.0 - b) * 0.90))
         if dim > 0.001 {
@@ -319,8 +315,7 @@ struct ReaderView: View {
       }
       .frame(maxWidth: 720)
       .frame(maxWidth: .infinity)
-      // .border(Color.blue, width: 1)
-      .padding(.horizontal, 12)
+      .padding(.horizontal, showEdges ? 12 : 6)
     }
     .toolbar(.hidden, for: .tabBar)
     .toolbar(.hidden, for: .navigationBar)
@@ -378,7 +373,6 @@ struct ReaderView: View {
     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: highlight.isPresented)
     .onChange(of: settings.isLocked) { _, locked in
       if locked {
-        // Focus mode: hide top/bottom edges.
         withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
           settings.isPresented = false
           search.close()
@@ -409,7 +403,6 @@ struct ReaderView: View {
         startOfflineMonitor(remoteID: id)
 
         Task {
-          // Lightweight: fetch meta only (no pages) for size estimate.
           if let meta = try? await documentsService.getOptimizedDocumentMeta(id: id) {
             offlineMeta = meta
             refreshOfflineSubtitle(remoteID: id)
@@ -494,7 +487,6 @@ struct ReaderView: View {
       settings.isPresented = false
     }
 
-    // Only start download immediately if we're online (prefer Wi-Fi).
     if networkMonitor.isOnline, networkMonitor.isOnWiFi {
       Task { @MainActor in
         await downloadAndSaveOffline(remoteID: id)
@@ -550,7 +542,9 @@ struct ReaderView: View {
         refreshOfflineSubtitle(remoteID: remoteID)
 
         let bytesStr = opt.optimizedSizeBytes.map { "\($0)" } ?? "nil"
-        print("[OfflineDownload] response status=\(opt.processingStatus) pages=\(ready)/\(total) optimizedSizeBytes=\(bytesStr) display=\(offlineSaveMessage ?? "")")
+        print(
+          "[OfflineDownload] response status=\(opt.processingStatus) pages=\(ready)/\(total) optimizedSizeBytes=\(bytesStr) display=\(offlineSaveMessage ?? "")"
+        )
 
         if let pages = opt.pages, !pages.isEmpty {
           try? OptimizedPagesStore.savePages(
@@ -665,7 +659,6 @@ struct ReaderView: View {
           return
         }
 
-        // Use full optimized payload so we can show page progress while preparing.
         if let meta = try? await documentsService.getOptimizedDocument(id: remoteID) {
           offlineMeta = meta
           if meta.processingStatus == "ready" {

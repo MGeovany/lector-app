@@ -23,7 +23,7 @@ struct ReaderSettingsPanelSheet: View {
   let onDisableOffline: () -> Void
   let offlineSubtitle: String?
   let offlineIsAvailable: Bool
-  // set to draggable range
+
   private var maxPanelH: CGFloat { containerHeight * 0.60 }
   private var minPanelH: CGFloat { containerHeight * 0.14 }
 

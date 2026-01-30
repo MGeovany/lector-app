@@ -19,8 +19,6 @@ struct ReaderScrollViewportHeightKey: PreferenceKey {
 }
 
 // MARK: - Continuous scroll restore (contentOffset-based)
-/// Sets the underlying ScrollView's contentOffset based on a 0..1 progress.
-/// Required to resume accurately in continuous scroll mode.
 struct ReaderScrollOffsetRestorer: UIViewRepresentable {
   let enabled: Bool
   let targetProgress: Double?
@@ -57,7 +55,6 @@ struct ReaderScrollOffsetRestorer: UIViewRepresentable {
 }
 
 // MARK: - Scroll metrics bridge (KVO-based)
-/// Reads the underlying SwiftUI ScrollView's scroll metrics and pushes them into SwiftUI state.
 struct ReaderScrollMetricsBridge: UIViewRepresentable {
   let enabled: Bool
   let debugLogs: Bool
@@ -88,7 +85,6 @@ struct ReaderScrollMetricsBridge: UIViewRepresentable {
       from: uiView,
       debugLogs: debugLogs,
       onUpdate: { snap in
-        // Convert UIKit offset (-topInset at top) into a "top=0" logical offset.
         let logicalOffsetY = max(0, snap.contentOffsetY + snap.insetTop)
         DispatchQueue.main.async {
           offsetY = logicalOffsetY

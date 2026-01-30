@@ -149,8 +149,6 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
     let text = pages[pageIndex]
     let total = max(1, text.count)
 
-    // AVSpeechSynthesizer does not support true time-seeking.
-    // We approximate 5 seconds by jumping a small number of characters.
     let estimatedCharsPerSecond: Double = 18
     let delta = Int((seconds * estimatedCharsPerSecond).rounded())
     let nextCursor = min(max(0, cursor + delta), max(0, total - 1))
@@ -196,7 +194,6 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
     ignoreNextDidFinish = true
     isSwitchingOrSeeking = true
     synth.stopSpeaking(at: .immediate)
-    // Delegate callbacks can arrive after this call; keep the flag and clear in delegate.
     isSwitchingOrSeeking = false
   }
 
@@ -266,7 +263,6 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
     let confidence = recognizer.languageHypotheses(withMaximum: 1)[lang] ?? 0
     guard confidence >= 0.40 else { return nil }
 
-    // NLLanguage rawValue is typically a BCP-47 language code like "es", "en", "fr".
     let raw = lang.rawValue
     if raw == "und" { return nil }
     return raw
@@ -277,7 +273,6 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
     let code = languageCode.lowercased()
     if code.isEmpty { return nil }
 
-    // Prefer a region-matched voice if the OS has one.
     var candidates: [String] = []
     if let region = Locale.current.regionCode?.uppercased(), !region.isEmpty {
       candidates.append("\(code)-\(region)")
@@ -288,7 +283,6 @@ final class ReaderAudiobookViewModel: NSObject, ObservableObject {
       if AVSpeechSynthesisVoice(language: tag) != nil { return tag }
     }
 
-    // Fallback: any installed voice whose tag starts with the language code.
     if let match = voices.first(where: { $0.language.lowercased().hasPrefix(code) }) {
       return match.language
     }

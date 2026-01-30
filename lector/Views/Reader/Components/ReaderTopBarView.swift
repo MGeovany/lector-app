@@ -13,7 +13,7 @@ struct ReaderTopBarView: View {
         Image(systemName: "chevron.left")
           .font(.system(size: 15, weight: .semibold))
           .foregroundStyle(preferences.theme.surfaceText.opacity(0.90))
-          .padding(10)
+          .padding(8)
       }
       .buttonStyle(.plain)
       .accessibilityLabel("Back")
@@ -52,7 +52,7 @@ struct ReaderTopBarView: View {
           Image(systemName: preferences.theme.icon)
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(preferences.theme.surfaceText.opacity(0.85))
-            .padding(10)
+            .padding(8)
             .symbolEffect(.bounce, value: preferences.theme)
         }
         .buttonStyle(.plain)
@@ -60,7 +60,7 @@ struct ReaderTopBarView: View {
       }
     }
     .padding(.horizontal, horizontalPadding)
-    .padding(.top, 12)
-    .padding(.bottom, 10)
+    .padding(.top, 8)
+    .padding(.bottom, 6)
   }
 }

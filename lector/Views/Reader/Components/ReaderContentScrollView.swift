@@ -15,7 +15,6 @@ struct ReaderContentScrollView: View {
   @Binding var searchQuery: String
   @Binding var clearSelectionToken: Int
 
-  // Scroll state
   @Binding var scrollOffsetY: CGFloat
   @Binding var scrollContentHeight: CGFloat
   @Binding var scrollViewportHeight: CGFloat
@@ -31,7 +30,6 @@ struct ReaderContentScrollView: View {
   let onShareSelection: (String, Int?, Double?) -> Void
   let onPagedProgressChange: (Int, Int) -> Void
 
-  // External scroll requests (used by audiobook sync in continuous mode)
   @Binding var scrollToPageIndex: Int?
   @Binding var scrollToPageToken: Int
 
@@ -39,8 +37,7 @@ struct ReaderContentScrollView: View {
   private let scrollSpaceName: String = "readerScrollSpace"
 
   private var bottomContentPadding: CGFloat {
-    // When chrome is hidden (Focus mode), keep the bottom tighter.
-    showTopChrome ? 18 : 8
+    showTopChrome ? 8 : 4
   }
 
   var body: some View {
@@ -77,14 +74,16 @@ struct ReaderContentScrollView: View {
                 )
               )
 
-            ReaderDocumentHeaderView(model: headerModel)
-              .padding(.horizontal, horizontalPadding)
-              .padding(.top, 18)
+            if showTopChrome {
+              ReaderDocumentHeaderView(model: headerModel)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.top, 18)
 
-            Divider()
-              .opacity(0.12)
-              .padding(.horizontal, horizontalPadding)
-              .padding(.top, 14)
+              Divider()
+                .opacity(0.12)
+                .padding(.horizontal, horizontalPadding)
+                .padding(.top, 14)
+            }
 
             if showSearch {
               ReaderSearchBarView(query: $searchQuery) {

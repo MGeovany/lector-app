@@ -232,6 +232,7 @@ struct ReaderView: View {
             x: 0,
             y: 0
           )
+          .padding(.horizontal, settings.isPresented ? 16 : 0)
           .animation(.spring(response: 0.35, dampingFraction: 0.85), value: settings.isPresented)
           .onAppear {
             chrome.lastScrollOffsetY = scroll.offsetY

@@ -20,6 +20,7 @@ struct ReaderView: View {
   @State private var search = ReaderSearchState()
   @State private var highlight = ReaderHighlightState()
   @State private var settings = ReaderSettingsState()
+  @State private var askAI = ReaderAskAIState()
   @State private var chrome = ReaderChromeState()
   @State private var scroll = ReaderScrollState()
 
@@ -298,10 +299,13 @@ struct ReaderView: View {
                 onEnableOffline: enableOffline,
                 onDisableOffline: disableOffline,
                 offlineSubtitle: offlineSubtitle,
-                offlineIsAvailable: offlineIsAvailable
+                offlineIsAvailable: offlineIsAvailable,
+                askAI: $askAI
               )
+              .transition(.move(edge: .bottom).combined(with: .opacity))
             }
           }
+
         }
 
         if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {

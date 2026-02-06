@@ -68,6 +68,10 @@ final class HomeViewModel {
         let readingProgress = pending?.progress ?? summary.readingProgress
         let pagesTotal = max(1, summary.pagesTotal, currentPage)
         let lastReadAt = pending?.updatedAt ?? summary.readingPositionUpdatedAt ?? summary.updatedAt
+        let effectiveProgress =
+          readingProgress
+          ?? (pagesTotal > 1 ? min(1.0, max(0.0, Double(min(max(1, currentPage), pagesTotal)) / Double(pagesTotal)))
+            : 0.0)
         return Book(
           id: UUID(uuidString: summary.id) ?? UUID(),
           remoteID: summary.id,
@@ -85,7 +89,7 @@ final class HomeViewModel {
               [.day], from: lastReadAt, to: Date()
             ).day ?? 0
           ),
-          isRead: (currentPage >= pagesTotal && pagesTotal > 0),
+          isRead: effectiveProgress >= 0.999,
           isFavorite: summary.isFavorite,
           tags: summary.tag.map { [$0] } ?? []
         )
@@ -148,7 +152,7 @@ final class HomeViewModel {
           next[i].pagesTotal = max(1, next[i].pagesTotal, pending.pageNumber)
           next[i].currentPage = min(pending.pageNumber, next[i].pagesTotal)
           next[i].readingProgress = pending.progress
-          next[i].isRead = pending.pageNumber >= next[i].pagesTotal && next[i].pagesTotal > 0
+          next[i].isRead = min(1.0, max(0.0, pending.progress)) >= 0.999
         }
       }
       books = next
@@ -361,7 +365,16 @@ final class HomeViewModel {
     if completed {
       updateBookProgress(bookID: bookID, page: total, totalPages: total, progressOverride: 1.0)
     } else {
-      updateBookProgress(bookID: bookID, page: 1, totalPages: total, progressOverride: 0.0)
+      // Special-case single-page docs: page=1 implies 100% in page-based math.
+      // Persist page_number=0 so backend + reload don't mark it as read again.
+      let persistedPageOverride: Int? = (total == 1) ? 0 : nil
+      updateBookProgress(
+        bookID: bookID,
+        page: 1,
+        totalPages: total,
+        progressOverride: 0.0,
+        persistedPageNumberOverride: persistedPageOverride
+      )
     }
   }
 
@@ -393,37 +406,44 @@ final class HomeViewModel {
     }
   }
 
-  func updateBookProgress(bookID: UUID, page: Int, totalPages: Int, progressOverride: Double? = nil)
-  {
+  func updateBookProgress(
+    bookID: UUID,
+    page: Int,
+    totalPages: Int,
+    progressOverride: Double? = nil,
+    persistedPageNumberOverride: Int? = nil
+  ) {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
     books[idx].pagesTotal = max(1, totalPages)
     books[idx].currentPage = min(max(1, page), books[idx].pagesTotal)
     if let progressOverride {
       books[idx].readingProgress = min(1.0, max(0.0, progressOverride))
     }
-    books[idx].isRead = (books[idx].currentPage >= books[idx].pagesTotal)
 
     guard let remoteID = books[idx].remoteID, !remoteID.isEmpty else { return }
 
     // Debounce network updates so we don't spam the backend while the user flips pages quickly.
     pendingReadingPositionTasks[remoteID]?.cancel()
-    let pageNumber = books[idx].currentPage
+    let persistedPageNumber = persistedPageNumberOverride ?? books[idx].currentPage
     let progress =
       progressOverride
-      ?? min(1.0, max(0.0, Double(pageNumber) / Double(max(1, books[idx].pagesTotal))))
+      ?? min(1.0, max(0.0, Double(persistedPageNumber) / Double(max(1, books[idx].pagesTotal))))
+
+    // Derive read state from progress so single-page books can be "unread" again when progress=0.
+    books[idx].isRead = progress >= 0.999
     pendingReadingPositionTasks[remoteID] = Task { [weak self] in
       try? await Task.sleep(nanoseconds: 650_000_000)  // ~0.65s
       guard let self else { return }
       do {
         try await self.readingPositionService.updateReadingPosition(
           documentID: remoteID,
-          pageNumber: pageNumber,
+          pageNumber: persistedPageNumber,
           progress: progress
         )
         PendingReadingPositionStore.remove(documentID: remoteID)
       } catch {
         PendingReadingPositionStore.save(
-          documentID: remoteID, pageNumber: pageNumber, progress: progress)
+          documentID: remoteID, pageNumber: persistedPageNumber, progress: progress)
       }
     }
   }

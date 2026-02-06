@@ -46,7 +46,7 @@ struct ReaderTopBarView: View {
         .accessibilityLabel("Reader settings")
 
         Button(action: onShowHighlights) {
-          Image(systemName: "highlighter")
+          Image(systemName: "bookmark")
             .font(.system(size: 15, weight: .semibold))
             .foregroundStyle(preferences.theme.surfaceText.opacity(headerIconOpacity))
             .padding(8)

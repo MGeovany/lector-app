@@ -53,6 +53,7 @@ final class SubscriptionStore: ObservableObject {
   @Published private(set) var isAutoRenewable: Bool = false
   @Published private(set) var nextPlan: SubscriptionPlan?
   @Published private(set) var nextPlanStartDate: Date?
+  @Published private(set) var trialEndDate: Date?
 
   @MainActor private let storeKit = StoreKitService()
 
@@ -84,6 +85,7 @@ final class SubscriptionStore: ObservableObject {
   var isPremium: Bool { plan.isPremium }
   var isPro: Bool { plan.isPro }
   var isFounder: Bool { plan.isFounder }
+  var isInFreeTrial: Bool { trialEndDate != nil && (trialEndDate ?? .distantPast) > Date() }
 
   /// Free is capped. Pro/Founder have a higher cap. Backend must also enforce the same limits.
   var maxStorageBytes: Int64 {
@@ -222,6 +224,7 @@ final class SubscriptionStore: ObservableObject {
     isAutoRenewable = entitlement.isAutoRenewable
     nextPlan = storeKit.nextEntitlementPlanChange?.nextPlan
     nextPlanStartDate = storeKit.nextEntitlementPlanChange?.effectiveDate
+    trialEndDate = entitlement.trialEndDate
     Task { await syncPlanToBackendIfPossible() }
   }
 
@@ -246,6 +249,15 @@ final class SubscriptionStore: ObservableObject {
   }
 
   private var backendPlanString: String {
+    // Represent Apple-managed intro free trial as a distinct backend plan so the server can
+    // apply a different Ask AI quota without changing DB schema.
+    if plan.isPro, isInFreeTrial {
+      switch plan {
+      case .proMonthly: return "pro_monthly_trial"
+      case .proYearly: return "pro_yearly_trial"
+      default: break
+      }
+    }
     switch plan {
     case .free: return "free"
     case .proMonthly: return "pro_monthly"
@@ -302,6 +314,7 @@ final class StoreKitService: ObservableObject {
     let plan: SubscriptionPlan
     let expirationDate: Date?
     let isAutoRenewable: Bool
+    let trialEndDate: Date?
   }
 
   struct NextPlanChange: Equatable {
@@ -311,7 +324,7 @@ final class StoreKitService: ObservableObject {
 
   @Published private(set) var productsByPlan: [SubscriptionPlan: Product] = [:]
   @Published private(set) var entitlement: Entitlement = .init(
-    plan: .free, expirationDate: nil, isAutoRenewable: false)
+    plan: .free, expirationDate: nil, isAutoRenewable: false, trialEndDate: nil)
   @Published private(set) var nextEntitlementPlanChange: NextPlanChange?
 
   private let productIDs: ProductIDs?
@@ -343,7 +356,7 @@ final class StoreKitService: ObservableObject {
 
   func refreshEntitlements() async {
     let best = await Self.bestEntitlementFromCurrentEntitlements()
-    entitlement = best ?? .init(plan: .free, expirationDate: nil, isAutoRenewable: false)
+    entitlement = best ?? .init(plan: .free, expirationDate: nil, isAutoRenewable: false, trialEndDate: nil)
     nextEntitlementPlanChange = await computeNextPlanChange(current: entitlement)
   }
 
@@ -354,7 +367,7 @@ final class StoreKitService: ObservableObject {
 
   func purchase(plan: SubscriptionPlan) async throws -> Entitlement {
     guard plan != .free else {
-      let free = Entitlement(plan: .free, expirationDate: nil, isAutoRenewable: false)
+      let free = Entitlement(plan: .free, expirationDate: nil, isAutoRenewable: false, trialEndDate: nil)
       entitlement = free
       return free
     }
@@ -442,7 +455,11 @@ final class StoreKitService: ObservableObject {
       await refreshEntitlements()
       return entitlement.plan == .free
         ? Entitlement(
-          plan: expectedPlan, expirationDate: nil, isAutoRenewable: product.type == .autoRenewable)
+          plan: expectedPlan,
+          expirationDate: nil,
+          isAutoRenewable: product.type == .autoRenewable,
+          trialEndDate: nil
+        )
         : entitlement
     case .userCancelled:
       throw StoreKitServiceError.purchaseCancelled
@@ -479,10 +496,23 @@ final class StoreKitService: ObservableObject {
 
       guard plan != .free else { continue }
 
+      // Detect introductory free trial. In modern iOS versions, `transaction.offer?.paymentMode`
+      // can be `.freeTrial` for intro offers.
+      let trialEndDate: Date? = {
+        guard plan.isPro else { return nil }
+        guard let offer = transaction.offer else { return nil }
+        if offer.paymentMode == .freeTrial {
+          // During free trial, the current transaction's expiration is the trial end.
+          return transaction.expirationDate
+        }
+        return nil
+      }()
+
       let ent = Entitlement(
         plan: plan,
         expirationDate: transaction.expirationDate,
-        isAutoRenewable: transaction.productType == .autoRenewable
+        isAutoRenewable: transaction.productType == .autoRenewable,
+        trialEndDate: trialEndDate
       )
 
       best = pickBest(best, ent)

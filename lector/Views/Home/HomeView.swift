@@ -240,7 +240,22 @@ private struct LibrarySectionPageView: View {
             // Minimal list style for All / To read / Finished (and search results).
             LazyVStack(spacing: 0) {
               ForEach(books) { book in
-                MinimalBookRowView(book: book, onOpen: { viewModel.selectedBook = book })
+                let statusText: String? = {
+                  switch section {
+                  case .allBooks:
+                    return book.completionStatusText ?? book.readingStatusText
+                  case .finished:
+                    return book.completionStatusText
+                  default:
+                    return nil
+                  }
+                }()
+                MinimalBookRowView(
+                  book: book,
+                  showsOptions: section == .allBooks,
+                  statusText: statusText,
+                  onOpen: { viewModel.selectedBook = book }
+                )
               }
             }
             .padding(.top, 6)
@@ -316,11 +331,13 @@ private struct ResumeReadingCardView: View {
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
               .lineLimit(3)
               .minimumScaleFactor(0.7)
+              .padding(.trailing, 44) // reserve space for options menu
 
             Text(book.author.uppercased())
               .font(.parkinsans(size: 14, weight: .semibold))
               .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.42) : .secondary)
               .lineLimit(1)
+              .padding(.trailing, 44)
           }
 
           HStack {
@@ -371,6 +388,10 @@ private struct ResumeReadingCardView: View {
       )
     }
     .buttonStyle(.plain)
+    .overlay(alignment: .topTrailing) {
+      BookOptionsMenu(book: book)
+        .padding(10)
+    }
   }
 }
 
@@ -449,6 +470,10 @@ private struct NextUpTileView: View {
       )
     }
     .buttonStyle(.plain)
+    .overlay(alignment: .topTrailing) {
+      BookOptionsMenu(book: book)
+        .padding(6)
+    }
   }
 }
 

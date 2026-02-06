@@ -345,12 +345,24 @@ final class HomeViewModel {
 
   func toggleRead(bookID: UUID) {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
-    books[idx].isRead.toggle()
+    setCompletion(bookID: bookID, completed: !books[idx].isRead)
   }
 
   func markAsRead(bookID: UUID) {
+    setCompletion(bookID: bookID, completed: true)
+  }
+
+  /// Persists completion by updating the backend reading position.
+  /// - completed=true: sets page=pagesTotal and progress=1.0
+  /// - completed=false: sets page=1 and progress=0.0
+  func setCompletion(bookID: UUID, completed: Bool) {
     guard let idx = books.firstIndex(where: { $0.id == bookID }) else { return }
-    books[idx].isRead = true
+    let total = max(1, books[idx].pagesTotal)
+    if completed {
+      updateBookProgress(bookID: bookID, page: total, totalPages: total, progressOverride: 1.0)
+    } else {
+      updateBookProgress(bookID: bookID, page: 1, totalPages: total, progressOverride: 0.0)
+    }
   }
 
   func toggleFavorite(bookID: UUID) {

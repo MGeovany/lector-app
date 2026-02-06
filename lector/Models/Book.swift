@@ -89,6 +89,34 @@ struct Book: Identifiable, Hashable {
     createdAt ?? .distantPast
   }
 
+  // MARK: - Status helpers (Completed / Reading)
+
+  var completedAt: Date? {
+    // Best available approximation: when the backend reading position was last updated
+    // while the book is at 100%.
+    guard isRead else { return nil }
+    return lastOpenedAt
+  }
+
+  var completionStatusText: String? {
+    guard let completedAt else { return nil }
+    return "Completed \(Self.statusDateFormatter.string(from: completedAt))"
+  }
+
+  var readingStatusText: String? {
+    // Treat very small progress as "not started" to avoid noisy "Reading 0%".
+    let pct = Int((progress * 100).rounded())
+    guard pct >= 2 && pct <= 99 else { return nil }
+    return "Reading \(pct)%"
+  }
+
+  private static let statusDateFormatter: DateFormatter = {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "en_US_POSIX")
+    f.dateFormat = "MMM d"
+    return f
+  }()
+
   var progress: Double {
     let pageProgress: Double = {
       guard pagesTotal > 0 else { return 0 }

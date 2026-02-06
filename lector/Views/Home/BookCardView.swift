@@ -11,6 +11,7 @@ struct BookCardView: View {
   /// When true, replaces the progress label with a "Start reading..." callout
   /// (used for the "To read" tab where the user hasn't started yet).
   let showStartReadingHint: Bool
+  let showsOptionsMenu: Bool
   @State private var isShowingCreateTag: Bool = false
   @State private var newTagName: String = ""
   @State private var isShowingEditDetails: Bool = false
@@ -21,13 +22,15 @@ struct BookCardView: View {
     onOpen: @escaping () -> Void,
     onToggleRead: @escaping () -> Void,
     onToggleFavorite: @escaping () -> Void,
-    showStartReadingHint: Bool = false
+    showStartReadingHint: Bool = false,
+    showsOptionsMenu: Bool = true
   ) {
     self.book = book
     self.onOpen = onOpen
     self.onToggleRead = onToggleRead
     self.onToggleFavorite = onToggleFavorite
     self.showStartReadingHint = showStartReadingHint
+    self.showsOptionsMenu = showsOptionsMenu
   }
 
   var body: some View {
@@ -121,7 +124,8 @@ struct BookCardView: View {
           .buttonStyle(.plain)
           .accessibilityLabel(book.isFavorite ? "Remove from favorites" : "Add to favorites")
 
-          Menu {
+          if showsOptionsMenu {
+            Menu {
             Button(action: onToggleRead) {
               Label(book.isRead ? "Mark as unread" : "Mark as read", systemImage: "checkmark")
             }
@@ -205,6 +209,7 @@ struct BookCardView: View {
               .frame(width: 36, height: 36)
               .contentShape(Rectangle())
           }
+          }
         }
       }
 
@@ -265,17 +270,14 @@ struct BookCardView: View {
       Text("Create a new tag and assign it to this document.")
     }
     .sheet(isPresented: $isShowingEditDetails) {
-      let initialColor = BookCardColorStore.get(for: documentKey)
       EditBookDetailsSheetView(
         colorScheme: colorScheme,
         availableTags: homeViewModel.availableTags,
         initialTitle: book.title,
         initialAuthor: book.author,
         initialTag: book.tags.first ?? "",
-        initialColor: initialColor,
         onCancel: { isShowingEditDetails = false },
-        onSave: { title, author, tag, color in
-          BookCardColorStore.set(color, for: documentKey)
+        onSave: { title, author, tag in
           isShowingEditDetails = false
           Task {
             await homeViewModel.updateBookDetails(
@@ -298,8 +300,6 @@ struct BookCardView: View {
     .alert("Delete this document?", isPresented: $isShowingDeleteConfirm) {
       Button("Cancel", role: .cancel) {}
       Button("Delete", role: .destructive) {
-        // Clear any per-document local UI state.
-        BookCardColorStore.delete(for: documentKey)
         Task { await homeViewModel.deleteBook(bookID: book.id) }
       }
     } message: {

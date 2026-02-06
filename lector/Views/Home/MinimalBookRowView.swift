@@ -3,7 +3,18 @@ import SwiftUI
 struct MinimalBookRowView: View {
   let book: Book
   let onOpen: () -> Void
+  let showsOptions: Bool
+  let statusText: String?
   @Environment(\.colorScheme) private var colorScheme
+
+  init(
+    book: Book, showsOptions: Bool = false, statusText: String? = nil, onOpen: @escaping () -> Void
+  ) {
+    self.book = book
+    self.showsOptions = showsOptions
+    self.statusText = statusText
+    self.onOpen = onOpen
+  }
 
   var body: some View {
     Button(action: onOpen) {
@@ -23,9 +34,21 @@ struct MinimalBookRowView: View {
             .font(.parkinsans(size: 13, weight: .medium))
             .foregroundStyle(subtitleColor.opacity(0.85))
             .lineLimit(1)
+
+          if let statusText, !statusText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Text(statusText)
+              .font(.parkinsansSemibold(size: 13))
+              .foregroundStyle(subtitleColor.opacity(0.45))
+              .lineLimit(1)
+              .padding(.top, 10)
+          }
         }
 
         Spacer(minLength: 0)
+
+        if showsOptions {
+          BookOptionsMenu(book: book)
+        }
 
         Circle()
           .strokeBorder(borderColor, lineWidth: 1.25)
@@ -88,9 +111,8 @@ struct MinimalBookRowView: View {
     tags: []
   )
   return VStack(spacing: 0) {
-    MinimalBookRowView(book: book, onOpen: {})
-    MinimalBookRowView(book: book, onOpen: {})
+    MinimalBookRowView(book: book, showsOptions: true, onOpen: {})
+    MinimalBookRowView(book: book, showsOptions: true, onOpen: {})
   }
   .padding(.top, 14)
 }
-

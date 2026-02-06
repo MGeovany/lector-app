@@ -113,10 +113,11 @@ struct PremiumUpsellSheetView: View {
         priceText: proPriceText,
         subtitle: "\(MAX_STORAGE_PRO_GB)GB storage, sync + backup, and Ask AI.",
         bullets: [
+          "1‑month free trial (eligible users)",
           "\(MAX_STORAGE_PRO_GB)GB total storage",
           "Sync + backup",
           "Private stats (soon)",
-          "Ask AI features",
+          "Ask AI (\(MAX_AI_TOKENS_TRIAL_PER_MONTH) tokens during trial, \(MAX_AI_TOKENS_PREMIUM_PER_MONTH) after)",
         ],
         badgeText: billingCycle == .yearly ? "Popular" : nil,
         isSelected: selectedPlan.isPro,

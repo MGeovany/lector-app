@@ -8,8 +8,12 @@ struct ReaderBottomPagerView: View {
   let onPrevious: () -> Void
   let onNext: () -> Void
 
+  private var canGoPrevious: Bool { currentIndex > 0 }
+  private var canGoNext: Bool { currentIndex < max(0, totalPages - 1) }
+  private let hitSize: CGFloat = 36
+
   var body: some View {
-    HStack(spacing: 12) {
+    HStack(spacing: 8) {
       Button {
         withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
           onPrevious()
@@ -17,42 +21,25 @@ struct ReaderBottomPagerView: View {
       } label: {
         Image(systemName: "chevron.left")
           .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(currentIndex > 0 ? 0.90 : 0.35))
-          .frame(width: 44, height: 44)
-          .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-              .fill(preferences.theme.surfaceText.opacity(0.06))
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-              .stroke(preferences.theme.surfaceText.opacity(0.10), lineWidth: 1)
-          )
+          .symbolRenderingMode(.hierarchical)
+          .foregroundStyle(preferences.theme.surfaceText.opacity(canGoPrevious ? 0.22 : 0.06))
+          // Keep a large hit target, but visually minimal.
+          .frame(width: hitSize, height: hitSize)
       }
-      .buttonStyle(.plain)
-      .disabled(currentIndex <= 0)
+      .buttonStyle(ReaderPagerGhostButtonStyle())
+      .disabled(!canGoPrevious)
       .accessibilityLabel("Previous page")
       .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in }.onEnded { _ in })
 
       Spacer(minLength: 0)
 
-      HStack(spacing: 8) {
-        Text("\(max(1, currentIndex + 1))/\(max(1, totalPages))")
-          .font(.system(size: 14, weight: .bold))
-          .foregroundStyle(preferences.theme.surfaceText.opacity(0.90))
-          .contentTransition(.numericText())
-      }
-      .padding(.horizontal, 16)
-      .padding(.vertical, 8)
-      .background(
-        Capsule(style: .continuous)
-          .fill(preferences.theme.surfaceText.opacity(0.06))
-      )
-      .overlay(
-        Capsule(style: .continuous)
-          .stroke(preferences.theme.surfaceText.opacity(0.10), lineWidth: 1)
-      )
-      .accessibilityLabel("Page \(max(1, currentIndex + 1)) of \(max(1, totalPages))")
-      .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)
+      Text("\(max(1, currentIndex + 1))/\(max(1, totalPages))")
+        .font(.system(size: 11, weight: .semibold))
+        .monospacedDigit()
+        .foregroundStyle(preferences.theme.surfaceSecondaryText.opacity(0.35))
+        .contentTransition(.numericText())
+        .accessibilityLabel("Page \(max(1, currentIndex + 1)) of \(max(1, totalPages))")
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: currentIndex)
 
       Spacer(minLength: 0)
 
@@ -63,27 +50,32 @@ struct ReaderBottomPagerView: View {
       } label: {
         Image(systemName: "chevron.right")
           .font(.system(size: 14, weight: .semibold))
-          .foregroundStyle(
-            preferences.theme.surfaceText.opacity(
-              currentIndex < max(0, totalPages - 1) ? 0.90 : 0.35)
-          )
-          .frame(width: 44, height: 44)
-          .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-              .fill(preferences.theme.surfaceText.opacity(0.06))
-          )
-          .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-              .stroke(preferences.theme.surfaceText.opacity(0.10), lineWidth: 1)
-          )
+          .symbolRenderingMode(.hierarchical)
+          .foregroundStyle(preferences.theme.surfaceText.opacity(canGoNext ? 0.22 : 0.06))
+          // Keep a large hit target, but visually minimal.
+          .frame(width: hitSize, height: hitSize)
       }
-      .buttonStyle(.plain)
-      .disabled(currentIndex >= max(0, totalPages - 1))
+      .buttonStyle(ReaderPagerGhostButtonStyle())
+      .disabled(!canGoNext)
       .accessibilityLabel("Next page")
       .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in }.onEnded { _ in })
     }
-    .padding(.horizontal, 16)
-    .padding(.vertical, 0)
-    .padding(.bottom, 0)
+    .padding(.horizontal, 30)
+    .padding(.vertical, 2)
+    .background(
+      RoundedRectangle(cornerRadius: 12, style: .continuous)
+        .fill(preferences.theme.surfaceBackground)
+    )
+  }
+}
+
+/// Ghost button: no background, no shadow — only a subtle press feedback.
+private struct ReaderPagerGhostButtonStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .contentShape(Rectangle())
+      .opacity(configuration.isPressed ? 0.55 : 1.0)
+      .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
+      .animation(.spring(response: 0.16, dampingFraction: 0.9), value: configuration.isPressed)
   }
 }

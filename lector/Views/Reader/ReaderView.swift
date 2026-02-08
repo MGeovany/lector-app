@@ -6,6 +6,7 @@ import UIKit
 /// - **Reader theme** (reader only): `ReadingTheme` — day/night/amber for the reading surface. Drives status bar *while* in reader.
 struct ReaderView: View {
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.scenePhase) private var scenePhase
   @EnvironmentObject private var preferences: PreferencesViewModel
   @AppStorage(AppPreferenceKeys.theme) private var appThemeRawValue: String = AppTheme.dark.rawValue
 
@@ -44,6 +45,9 @@ struct ReaderView: View {
   @State private var focusAutoHideTask: Task<Void, Never>? = nil
   @State private var focusSwipeInFlight: Bool = false
 
+  @State private var activeScreen: UIScreen? = nil
+  @State private var originalSystemBrightness: CGFloat? = nil
+
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let readingPositionService: ReadingPositionServicing = GoReadingPositionService()
   private let highlightsService: HighlightsServicing = GoHighlightsService()
@@ -73,6 +77,7 @@ struct ReaderView: View {
   var body: some View {
     let focusEnabled = settings.isLocked
     let showEdges = !focusEnabled || chrome.isVisible
+    let isFullBrightness = preferences.brightness >= 0.999
 
     ZStack {
       Group {
@@ -89,6 +94,13 @@ struct ReaderView: View {
         }
       }
       .ignoresSafeArea()
+      // Capture the actual screen for "native" brightness control.
+      .background(
+        ReaderScreenAccessor { screen in
+          activeScreen = screen
+        }
+        .frame(width: 0, height: 0)
+      )
 
       VStack(spacing: 0) {
         if showEdges {
@@ -310,30 +322,40 @@ struct ReaderView: View {
               .transition(.move(edge: .bottom).combined(with: .opacity))
             }
           }
+          .overlay(alignment: .bottom) {
+            if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
+              ReaderBottomPagerView(
+                currentIndex: viewModel.currentIndex,
+                totalPages: viewModel.pages.count,
+                onPrevious: viewModel.goToPreviousPage,
+                onNext: viewModel.goToNextPage
+              )
+              // Sit down in the bottom "blank" safe-area space, but keep a tiny gap for the Home indicator.
+              .padding(.bottom, max(6, geo.safeAreaInsets.bottom * 0.12))
+            }
+          }
 
         }
-
-        if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
-          ReaderBottomPagerView(
-            currentIndex: viewModel.currentIndex,
-            totalPages: viewModel.pages.count,
-            onPrevious: viewModel.goToPreviousPage,
-            onNext: viewModel.goToNextPage
-          )
-        }
+        // Allow paged mode to use the bottom safe-area space (user wants text + pager down there).
+        .ignoresSafeArea(.container, edges: .bottom)
       }
       .overlay {
-        let b = min(1.0, max(0.0, preferences.brightness))
-        let dim = min(0.78, max(0.0, (1.0 - b) * 0.90))
+        // If the user wants the reader dimmer than the device's current brightness,
+        // apply a black overlay. If they want it brighter, we raise system brightness instead.
+        let desired = min(1.0, max(0.0, preferences.brightness))
+        let original = Double(originalSystemBrightness ?? 1.0)
+        let sys = max(original, desired)
+        let dim = sys > 0.001 ? min(0.92, max(0.0, 1.0 - (desired / sys))) : 0.0
         if dim > 0.001 {
           Color.black.opacity(dim)
             .ignoresSafeArea()
             .allowsHitTesting(false)
         }
       }
-      .frame(maxWidth: 720)
+      // When brightness is at 100%, avoid the "boxed" look by letting the reading surface go full-bleed.
+      .frame(maxWidth: (isFullBrightness && !settings.isPresented) ? .infinity : 720)
       .frame(maxWidth: .infinity)
-      .padding(.horizontal, settings.isPresented ? 0 : (showEdges ? 12 : 6))
+      .padding(.horizontal, settings.isPresented ? 0 : (isFullBrightness ? 0 : (showEdges ? 12 : 6)))
     }
     .toolbar(.hidden, for: .tabBar)
     .toolbar(.hidden, for: .navigationBar)
@@ -341,6 +363,29 @@ struct ReaderView: View {
     .environment(\.colorScheme, readerStatusBarScheme)
     .navigationBarBackButtonHidden(true)
     .preference(key: TabBarHiddenPreferenceKey.self, value: !isDismissing)
+    .onAppear {
+      applyReaderBrightnessIfPossible()
+    }
+    .onDisappear {
+      restoreSystemBrightnessIfNeeded()
+    }
+    .onChange(of: preferences.brightness) { _, _ in
+      applyReaderBrightnessIfPossible()
+    }
+    .onChange(of: activeScreen) { _, _ in
+      applyReaderBrightnessIfPossible()
+    }
+    .onChange(of: scenePhase) { _, newPhase in
+      // Restore when leaving active, re-apply when returning.
+      switch newPhase {
+      case .active:
+        applyReaderBrightnessIfPossible()
+      case .inactive, .background:
+        restoreSystemBrightnessIfNeeded()
+      @unknown default:
+        break
+      }
+    }
     .overlay {
       if highlight.isPresented {
         HighlightShareEditorView(
@@ -505,6 +550,33 @@ struct ReaderView: View {
       cancelFocusAutoHide()
       stopOfflineMonitor()
     }
+  }
+
+  @MainActor
+  private func applyReaderBrightnessIfPossible() {
+    let desired = CGFloat(min(1.0, max(0.0, preferences.brightness)))
+    let screen = activeScreen ?? UIScreen.main
+
+    if originalSystemBrightness == nil {
+      originalSystemBrightness = screen.brightness
+    }
+
+    let original = originalSystemBrightness ?? screen.brightness
+    // Only raise system brightness when needed (never lower the user's system setting).
+    let targetSystem = max(original, desired)
+    if abs(screen.brightness - targetSystem) > 0.005 {
+      screen.brightness = targetSystem
+    }
+  }
+
+  @MainActor
+  private func restoreSystemBrightnessIfNeeded() {
+    guard let originalSystemBrightness else { return }
+    let screen = activeScreen ?? UIScreen.main
+    if abs(screen.brightness - originalSystemBrightness) > 0.005 {
+      screen.brightness = originalSystemBrightness
+    }
+    self.originalSystemBrightness = nil
   }
 
   @MainActor

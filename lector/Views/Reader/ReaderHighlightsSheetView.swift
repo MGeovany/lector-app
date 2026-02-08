@@ -130,6 +130,7 @@ private struct HighlightRowView: View {
   let onDelete: () -> Void
 
   @EnvironmentObject private var preferences: PreferencesViewModel
+  private let actionHitSize: CGFloat = 44
   private static let dateFormatter: DateFormatter = {
     let f = DateFormatter()
     f.locale = Locale(identifier: "en_US_POSIX")
@@ -152,29 +153,34 @@ private struct HighlightRowView: View {
 
         Spacer(minLength: 0)
 
-        Button(action: onShare) {
-          Image(systemName: "square.and.arrow.up")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(iconTint)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Share")
+        HStack(spacing: 14) {
+          HighlightActionButton(
+            systemName: "square.and.arrow.up",
+            accessibilityLabel: "Share",
+            hitSize: actionHitSize,
+            tint: iconTint,
+            background: iconBackground,
+            action: onShare
+          )
 
-        Button(action: onGoTo) {
-          Image(systemName: "arrow.turn.down.right")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(iconTint)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Go to page")
+          HighlightActionButton(
+            systemName: "arrow.turn.down.right",
+            accessibilityLabel: "Go to page",
+            hitSize: actionHitSize,
+            tint: iconTint,
+            background: iconBackground,
+            action: onGoTo
+          )
 
-        Button(action: onDelete) {
-          Image(systemName: "trash")
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(iconTint)
+          HighlightActionButton(
+            systemName: "trash",
+            accessibilityLabel: "Delete",
+            hitSize: actionHitSize,
+            tint: iconTint,
+            background: iconBackground,
+            action: onDelete
+          )
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Delete")
       }
     }
     .padding(14)
@@ -203,6 +209,32 @@ private struct HighlightRowView: View {
 
   private var iconTint: Color {
     preferences.theme.surfaceSecondaryText.opacity(0.62)
+  }
+
+  private var iconBackground: Color {
+    preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.05 : 0.08)
+  }
+}
+
+private struct HighlightActionButton: View {
+  let systemName: String
+  let accessibilityLabel: String
+  let hitSize: CGFloat
+  let tint: Color
+  let background: Color
+  let action: () -> Void
+
+  var body: some View {
+    Button(action: action) {
+      Image(systemName: systemName)
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundStyle(tint)
+        .frame(width: hitSize, height: hitSize)
+        .background(background, in: Circle())
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(accessibilityLabel)
   }
 }
 

@@ -10,7 +10,8 @@ struct ReaderBottomPagerView: View {
 
   private var canGoPrevious: Bool { currentIndex > 0 }
   private var canGoNext: Bool { currentIndex < max(0, totalPages - 1) }
-  private let hitSize: CGFloat = 36
+  private let hitWidth: CGFloat = 44
+  private let hitHeight: CGFloat = 36
 
   var body: some View {
     HStack(spacing: 8) {
@@ -24,9 +25,9 @@ struct ReaderBottomPagerView: View {
           .symbolRenderingMode(.hierarchical)
           .foregroundStyle(preferences.theme.surfaceText.opacity(canGoPrevious ? 0.22 : 0.06))
           // Keep a large hit target, but visually minimal.
-          .frame(width: hitSize, height: hitSize)
+          .frame(width: hitWidth, height: hitHeight)
       }
-      .buttonStyle(ReaderPagerGhostButtonStyle())
+      .buttonStyle(ReaderPagerCapsuleButtonStyle(isEnabled: canGoPrevious, theme: preferences.theme))
       .disabled(!canGoPrevious)
       .accessibilityLabel("Previous page")
       .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in }.onEnded { _ in })
@@ -53,9 +54,9 @@ struct ReaderBottomPagerView: View {
           .symbolRenderingMode(.hierarchical)
           .foregroundStyle(preferences.theme.surfaceText.opacity(canGoNext ? 0.22 : 0.06))
           // Keep a large hit target, but visually minimal.
-          .frame(width: hitSize, height: hitSize)
+          .frame(width: hitWidth, height: hitHeight)
       }
-      .buttonStyle(ReaderPagerGhostButtonStyle())
+      .buttonStyle(ReaderPagerCapsuleButtonStyle(isEnabled: canGoNext, theme: preferences.theme))
       .disabled(!canGoNext)
       .accessibilityLabel("Next page")
       .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in }.onEnded { _ in })
@@ -69,12 +70,26 @@ struct ReaderBottomPagerView: View {
   }
 }
 
-/// Ghost button: no background, no shadow — only a subtle press feedback.
-private struct ReaderPagerGhostButtonStyle: ButtonStyle {
+/// Capsule button: subtle background + border + press feedback.
+private struct ReaderPagerCapsuleButtonStyle: ButtonStyle {
+  let isEnabled: Bool
+  let theme: ReadingTheme
+
   func makeBody(configuration: Configuration) -> some View {
     configuration.label
-      .contentShape(Rectangle())
-      .opacity(configuration.isPressed ? 0.55 : 1.0)
+      .contentShape(Capsule(style: .continuous))
+      .background(
+        Capsule(style: .continuous)
+          .fill(theme.surfaceText.opacity(theme == .day ? 0.04 : 0.06))
+      )
+      .overlay(
+        Capsule(style: .continuous)
+          .stroke(
+            theme.surfaceText.opacity(isEnabled ? (theme == .day ? 0.10 : 0.14) : 0.06),
+            lineWidth: 1
+          )
+      )
+      .opacity(configuration.isPressed ? 0.65 : 1.0)
       .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
       .animation(.spring(response: 0.16, dampingFraction: 0.9), value: configuration.isPressed)
   }

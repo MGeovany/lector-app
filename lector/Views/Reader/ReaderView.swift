@@ -55,7 +55,6 @@ struct ReaderView: View {
   @State private var documentHighlights: [RemoteHighlight] = []
   @State private var isHighlightsSheetPresented: Bool = false
 
-  private let shortDocContinuousScrollMaxPages: Int = 10
   private let horizontalPadding: CGFloat = 20
   #if DEBUG
     private let debugScrollLogs: Bool = true
@@ -75,32 +74,18 @@ struct ReaderView: View {
   }
 
   var body: some View {
-    let focusEnabled = settings.isLocked
-    let showEdges = !focusEnabled || chrome.isVisible
-    let isFullBrightness = preferences.brightness >= 0.999
+    let focusEnabled: Bool = settings.isLocked
+    let showEdges: Bool = !focusEnabled || chrome.isVisible
+    let isFullBrightness: Bool = preferences.brightness >= 0.999
 
-    ZStack {
-      Group {
-        if settings.isPresented {
-          if preferences.theme == .day {
-            Color(red: 248.0 / 255.0, green: 248.0 / 255.0, blue: 248.0 / 255.0)
-          } else if preferences.theme == .night {
-            Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 10.0 / 255.0)
-          } else {
-            preferences.theme.surfaceBackground
-          }
-        } else {
-          preferences.theme.surfaceBackground
-        }
-      }
-      .ignoresSafeArea()
-      // Capture the actual screen for "native" brightness control.
-      .background(
-        ReaderScreenAccessor { screen in
-          activeScreen = screen
-        }
-        .frame(width: 0, height: 0)
-      )
+    let contentMaxWidth: CGFloat? = (isFullBrightness && !settings.isPresented) ? .infinity : 720
+    let outerHorizontalPadding: CGFloat = readerOuterHorizontalPadding(
+      showEdges: showEdges,
+      isFullBrightness: isFullBrightness
+    )
+
+    return ZStack {
+      readerBackgroundView
 
       VStack(spacing: 0) {
         if showEdges {
@@ -108,254 +93,27 @@ struct ReaderView: View {
             ReaderTopBarView(
               horizontalPadding: horizontalPadding,
               showReaderSettings: $settings.isPresented,
-              onShowHighlights: {
-                isHighlightsSheetPresented = true
-              },
+              onShowHighlights: { isHighlightsSheetPresented = true },
               onBack: handleBack
             )
           }
         }
 
         GeometryReader { geo in
-          let settingsGap: CGFloat = 16
-
-          ReaderContentScrollView(
-            book: book,
-            viewModel: viewModel,
-            headerModel: ReaderHeaderModel(book: book, pages: viewModel.pages),
-            horizontalPadding: horizontalPadding,
-            shouldUseContinuousScroll: shouldUseContinuousScroll,
-            showTopChrome: showEdges,
-            highlights: documentHighlights,
-            showSearch: $search.isVisible,
-            searchQuery: $search.query,
-            clearSelectionToken: $highlight.clearSelectionToken,
-            scrollOffsetY: $scroll.offsetY,
-            scrollContentHeight: $scroll.contentHeight,
-            scrollViewportHeight: $scroll.viewportHeight,
-            scrollInsetTop: $scroll.insetTop,
-            scrollInsetBottom: $scroll.insetBottom,
-            scrollProgress: $scroll.progress,
-            didRestoreContinuousScroll: $scroll.didRestoreContinuousScroll,
-            didAttachKVOScrollMetrics: $scroll.didAttachKVOScrollMetrics,
-            restoreProgress: continuousRestoreProgress,
-            debugScrollLogs: debugScrollLogs,
-            onScrollStateChange: handleScrollStateChange,
-            onShareSelection: { text, page, progress in
-              highlight.present(text: text, pageNumber: page, progress: progress)
-            },
-            onPagedProgressChange: { page, total in
-              onProgressChange?(page, total, nil)
-            },
-            scrollToPageIndex: $audiobookScrollToIndex,
-            scrollToPageToken: $audiobookScrollToToken
+          readerScrollSurface(
+            geo: geo,
+            showEdges: showEdges,
+            focusEnabled: focusEnabled
           )
-          .contentShape(Rectangle())
-          .simultaneousGesture(
-            TapGesture().onEnded {
-              guard focusEnabled else { return }
-              withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-                chrome.isVisible.toggle()
-              }
-              if chrome.isVisible {
-                scheduleFocusAutoHide()
-              } else {
-                cancelFocusAutoHide()
-              }
-            }
-          )
-          .simultaneousGesture(
-            DragGesture(minimumDistance: 16, coordinateSpace: .local)
-              .onEnded { value in
-                guard focusEnabled else { return }
-                guard !settings.isPresented else { return }
-                guard !search.isVisible else { return }
-                guard !highlight.isPresented else { return }
-                guard !viewModel.isLoading else { return }
-                guard !focusSwipeInFlight else { return }
-
-                let dx = value.translation.width
-                let dy = value.translation.height
-
-                guard abs(dx) > max(24, abs(dy) * 1.35) else { return }
-
-                focusSwipeInFlight = true
-                defer {
-                  DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
-                    focusSwipeInFlight = false
-                  }
-                }
-
-                if dx > 60 {
-                  focusSwipeAdvancePage()
-                } else if dx < -60 {
-                  focusSwipeGoBackPage()
-                }
-              }
-          )
-          .onChange(of: geo.size, initial: true) { _, newSize in
-            startLoadingIfNeeded(container: newSize)
-          }
-          .onChange(of: viewModel.pages) { _, newPages in
-            audiobook.updatePages(newPages)
-          }
-          .onChange(of: viewModel.currentIndex) { _, idx in
-            if audiobookEnabled {
-              audiobook.userDidNavigate(to: idx)
-              if shouldUseContinuousScroll {
-                requestScrollToPage(idx)
-              }
-            }
-          }
-          .padding(.top, settings.isPresented ? 14 : 0)
-          .padding(.bottom, settings.isPresented ? settingsGap : 0)
-          .background {
-            RoundedRectangle(
-              cornerRadius: settings.isPresented ? 28 : 0,
-              style: .continuous
-            )
-            .fill(settings.isPresented ? preferences.theme.surfaceBackground : Color.clear)
-          }
-          .clipShape(
-            RoundedRectangle(
-              cornerRadius: settings.isPresented ? 28 : 0,
-              style: .continuous,
-            )
-          )
-          .overlay {
-            if settings.isPresented {
-              RoundedRectangle(
-                cornerRadius: 28,
-                style: .continuous
-              )
-              .stroke(
-                preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.08 : 0.12),
-                lineWidth: 1
-              )
-            }
-          }
-          .shadow(
-            color: {
-              guard settings.isPresented else { return Color.clear }
-              switch preferences.theme {
-              case .day:
-                return Color.black.opacity(0.08)
-              case .night:
-                return Color.black.opacity(0.25)
-              case .amber:
-                return Color.black.opacity(0.12)
-              }
-            }(),
-            radius: settings.isPresented ? 12 : 0,
-            x: 0,
-            y: 0
-          )
-          .padding(.horizontal, settings.isPresented ? 16 : 0)
-          .animation(.spring(response: 0.35, dampingFraction: 0.85), value: settings.isPresented)
-          .onAppear {
-            chrome.lastScrollOffsetY = scroll.offsetY
-            if shouldUseContinuousScroll, scroll.offsetY > 40 {
-              chrome.isVisible = false
-            }
-          }
-          .onChange(of: scroll.didRestoreContinuousScroll) { _, restored in
-            guard restored else { return }
-            if shouldUseContinuousScroll, scroll.offsetY > 40, !search.isVisible {
-              withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
-                chrome.isVisible = false
-              }
-            }
-            chrome.lastScrollOffsetY = scroll.offsetY
-          }
-          .safeAreaInset(edge: .bottom, spacing: 12) {
-            if showEdges, audiobookEnabled, !audiobook.isConverting, !settings.isPresented {
-              let total = max(1, viewModel.pages.count)
-              let idx = min(max(0, audiobook.currentPageIndex), max(0, total - 1))
-              let overall = min(
-                1.0, max(0.0, (Double(idx) + audiobook.pageProgress) / Double(total)))
-
-              ReaderAudiobookControlsView(
-                isPlaying: audiobook.isPlaying,
-                progress: overall,
-                pageLabel: "\(idx + 1) of \(total)",
-                onPreviousPage: {
-                  audiobook.previousPage()
-                },
-                onBack5: {
-                  audiobook.skipBackward5Seconds()
-                },
-                onPlayPause: {
-                  audiobook.togglePlayPause()
-                },
-                onForward5: {
-                  audiobook.skipForward5Seconds()
-                },
-                onNextPage: {
-                  audiobook.nextPage()
-                }
-              )
-              .environmentObject(preferences)
-              .padding(.horizontal, 12)
-              .padding(.bottom, 6)
-              .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-          }
-          .safeAreaInset(edge: .bottom, spacing: 0) {
-            if showEdges {
-              ReaderSettingsPanelView(
-                containerHeight: geo.size.height,
-                isPresented: $settings.isPresented,
-                dragOffset: $settings.dragOffset,
-                isLocked: $settings.isLocked,
-                searchVisible: $search.isVisible,
-                searchQuery: $search.query,
-                audiobookEnabled: $audiobookEnabled,
-                onEnableAudiobook: enableAudiobook,
-                onDisableAudiobook: disableAudiobook,
-                offlineEnabled: $offlineEnabled,
-                onEnableOffline: enableOffline,
-                onDisableOffline: disableOffline,
-                offlineSubtitle: offlineSubtitle,
-                offlineIsAvailable: offlineIsAvailable,
-                askAI: askAI
-              )
-              .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-          }
-          .overlay(alignment: .bottom) {
-            if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
-              ReaderBottomPagerView(
-                currentIndex: viewModel.currentIndex,
-                totalPages: viewModel.pages.count,
-                onPrevious: viewModel.goToPreviousPage,
-                onNext: viewModel.goToNextPage
-              )
-              // Sit down in the bottom "blank" safe-area space, but keep a tiny gap for the Home indicator.
-              .padding(.bottom, max(6, geo.safeAreaInsets.bottom * 0.12))
-            }
-          }
-
         }
         // Allow paged mode to use the bottom safe-area space (user wants text + pager down there).
         .ignoresSafeArea(.container, edges: .bottom)
       }
-      .overlay {
-        // If the user wants the reader dimmer than the device's current brightness,
-        // apply a black overlay. If they want it brighter, we raise system brightness instead.
-        let desired = min(1.0, max(0.0, preferences.brightness))
-        let original = Double(originalSystemBrightness ?? 1.0)
-        let sys = max(original, desired)
-        let dim = sys > 0.001 ? min(0.92, max(0.0, 1.0 - (desired / sys))) : 0.0
-        if dim > 0.001 {
-          Color.black.opacity(dim)
-            .ignoresSafeArea()
-            .allowsHitTesting(false)
-        }
-      }
+      .overlay { readerBrightnessDimOverlay }
       // When brightness is at 100%, avoid the "boxed" look by letting the reading surface go full-bleed.
-      .frame(maxWidth: (isFullBrightness && !settings.isPresented) ? .infinity : 720)
+      .frame(maxWidth: contentMaxWidth)
       .frame(maxWidth: .infinity)
-      .padding(.horizontal, settings.isPresented ? 0 : (isFullBrightness ? 0 : (showEdges ? 12 : 6)))
+      .padding(.horizontal, outerHorizontalPadding)
     }
     .toolbar(.hidden, for: .tabBar)
     .toolbar(.hidden, for: .navigationBar)
@@ -552,6 +310,271 @@ struct ReaderView: View {
     }
   }
 
+  private var readerBackgroundView: some View {
+    readerBackgroundColor
+      .ignoresSafeArea()
+      // Capture the actual screen for "native" brightness control.
+      .background(
+        ReaderScreenAccessor { screen in
+          activeScreen = screen
+        }
+        .frame(width: 0, height: 0)
+      )
+  }
+
+  private var readerBackgroundColor: Color {
+    // Keep the reader surface background stable while the settings panel is up.
+    if settings.isPresented {
+      switch preferences.theme {
+      case .day:
+        return Color(red: 248.0 / 255.0, green: 248.0 / 255.0, blue: 248.0 / 255.0)
+      case .night:
+        return Color(red: 10.0 / 255.0, green: 10.0 / 255.0, blue: 10.0 / 255.0)
+      case .amber:
+        return preferences.theme.surfaceBackground
+      }
+    }
+    return preferences.theme.surfaceBackground
+  }
+
+  private func readerOuterHorizontalPadding(showEdges: Bool, isFullBrightness: Bool) -> CGFloat {
+    if settings.isPresented { return 0 }
+    if isFullBrightness { return 0 }
+    return showEdges ? 12 : 6
+  }
+
+  private var readerDimOpacity: Double {
+    // If the user wants the reader dimmer than the device's current brightness,
+    // apply a black overlay. If they want it brighter, we raise system brightness instead.
+    let desired: Double = min(1.0, max(0.0, preferences.brightness))
+    let original: Double = Double(originalSystemBrightness ?? 1.0)
+    let sys: Double = max(original, desired)
+    let dim: Double = sys > 0.001 ? min(0.92, max(0.0, 1.0 - (desired / sys))) : 0.0
+    return dim
+  }
+
+  @ViewBuilder
+  private var readerBrightnessDimOverlay: some View {
+    let dim: Double = readerDimOpacity
+    if dim > 0.001 {
+      Color.black.opacity(dim)
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+  }
+
+  private var readerSurfaceShadowColor: Color {
+    guard settings.isPresented else { return Color.clear }
+    switch preferences.theme {
+    case .day:
+      return Color.black.opacity(0.05)
+    case .night:
+      return Color.black.opacity(0.18)
+    case .amber:
+      return Color.black.opacity(0.08)
+    }
+  }
+
+  @ViewBuilder
+  private func readerScrollSurface(
+    geo: GeometryProxy,
+    showEdges: Bool,
+    focusEnabled: Bool
+  ) -> some View {
+    let settingsGap: CGFloat = 16
+    let surfaceCornerRadius: CGFloat = settings.isPresented ? 28 : 0
+    let surfaceTopPadding: CGFloat = settings.isPresented ? 14 : 0
+    let surfaceBottomPadding: CGFloat = settings.isPresented ? settingsGap : 0
+    let surfaceHorizontalPadding: CGFloat = settings.isPresented ? 16 : 0
+
+    ReaderContentScrollView(
+      book: book,
+      viewModel: viewModel,
+      headerModel: ReaderHeaderModel(book: book, pages: viewModel.pages),
+      horizontalPadding: horizontalPadding,
+      shouldUseContinuousScroll: shouldUseContinuousScroll,
+      showTopChrome: showEdges,
+      highlights: documentHighlights,
+      showSearch: $search.isVisible,
+      searchQuery: $search.query,
+      clearSelectionToken: $highlight.clearSelectionToken,
+      scrollOffsetY: $scroll.offsetY,
+      scrollContentHeight: $scroll.contentHeight,
+      scrollViewportHeight: $scroll.viewportHeight,
+      scrollInsetTop: $scroll.insetTop,
+      scrollInsetBottom: $scroll.insetBottom,
+      scrollProgress: $scroll.progress,
+      didRestoreContinuousScroll: $scroll.didRestoreContinuousScroll,
+      didAttachKVOScrollMetrics: $scroll.didAttachKVOScrollMetrics,
+      restoreProgress: continuousRestoreProgress,
+      debugScrollLogs: debugScrollLogs,
+      onScrollStateChange: handleScrollStateChange,
+      onShareSelection: { text, page, progress in
+        highlight.present(text: text, pageNumber: page, progress: progress)
+      },
+      onPagedProgressChange: { page, total in
+        onProgressChange?(page, total, nil)
+      },
+      scrollToPageIndex: $audiobookScrollToIndex,
+      scrollToPageToken: $audiobookScrollToToken
+    )
+    .contentShape(Rectangle())
+    .simultaneousGesture(
+      TapGesture().onEnded {
+        guard focusEnabled else { return }
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+          chrome.isVisible.toggle()
+        }
+        if chrome.isVisible {
+          scheduleFocusAutoHide()
+        } else {
+          cancelFocusAutoHide()
+        }
+      }
+    )
+    .simultaneousGesture(
+      DragGesture(minimumDistance: 16, coordinateSpace: .local)
+        .onEnded { value in
+          guard focusEnabled else { return }
+          guard !settings.isPresented else { return }
+          guard !search.isVisible else { return }
+          guard !highlight.isPresented else { return }
+          guard !viewModel.isLoading else { return }
+          guard !focusSwipeInFlight else { return }
+
+          let dx: CGFloat = value.translation.width
+          let dy: CGFloat = value.translation.height
+
+          guard abs(dx) > max(24, abs(dy) * 1.35) else { return }
+
+          focusSwipeInFlight = true
+          defer {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.20) {
+              focusSwipeInFlight = false
+            }
+          }
+
+          if dx > 60 {
+            focusSwipeAdvancePage()
+          } else if dx < -60 {
+            focusSwipeGoBackPage()
+          }
+        }
+    )
+    .onChange(of: geo.size, initial: true) { _, newSize in
+      startLoadingIfNeeded(container: newSize)
+    }
+    .onChange(of: viewModel.pages) { _, newPages in
+      audiobook.updatePages(newPages)
+    }
+    .onChange(of: viewModel.currentIndex) { _, idx in
+      if audiobookEnabled {
+        audiobook.userDidNavigate(to: idx)
+        if shouldUseContinuousScroll {
+          requestScrollToPage(idx)
+        }
+      }
+    }
+    .padding(.top, surfaceTopPadding)
+    .padding(.bottom, surfaceBottomPadding)
+    .background {
+      RoundedRectangle(cornerRadius: surfaceCornerRadius, style: .continuous)
+        .fill(settings.isPresented ? preferences.theme.surfaceBackground : Color.clear)
+    }
+    .clipShape(RoundedRectangle(cornerRadius: surfaceCornerRadius, style: .continuous))
+    .overlay {
+      if settings.isPresented {
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+          .stroke(
+            preferences.theme.surfaceText.opacity(preferences.theme == .day ? 0.08 : 0.12),
+            lineWidth: 1
+          )
+      }
+    }
+    .shadow(
+      color: readerSurfaceShadowColor,
+      radius: settings.isPresented ? 8 : 0,
+      x: 0,
+      y: 0
+    )
+    .padding(.horizontal, surfaceHorizontalPadding)
+    .animation(.spring(response: 0.35, dampingFraction: 0.85), value: settings.isPresented)
+    .onAppear {
+      chrome.lastScrollOffsetY = scroll.offsetY
+      if shouldUseContinuousScroll, scroll.offsetY > 40 {
+        chrome.isVisible = false
+      }
+    }
+    .onChange(of: scroll.didRestoreContinuousScroll) { _, restored in
+      guard restored else { return }
+      if shouldUseContinuousScroll, scroll.offsetY > 40, !search.isVisible {
+        withAnimation(.spring(response: 0.24, dampingFraction: 0.9)) {
+          chrome.isVisible = false
+        }
+      }
+      chrome.lastScrollOffsetY = scroll.offsetY
+    }
+    .safeAreaInset(edge: .bottom, spacing: 12) {
+      if showEdges, audiobookEnabled, !audiobook.isConverting, !settings.isPresented {
+        let total: Int = max(1, viewModel.pages.count)
+        let idx: Int = min(max(0, audiobook.currentPageIndex), max(0, total - 1))
+        let overall: Double = min(
+          1.0,
+          max(0.0, (Double(idx) + audiobook.pageProgress) / Double(total))
+        )
+
+        ReaderAudiobookControlsView(
+          isPlaying: audiobook.isPlaying,
+          progress: overall,
+          pageLabel: "\(idx + 1) of \(total)",
+          onPreviousPage: { audiobook.previousPage() },
+          onBack5: { audiobook.skipBackward5Seconds() },
+          onPlayPause: { audiobook.togglePlayPause() },
+          onForward5: { audiobook.skipForward5Seconds() },
+          onNextPage: { audiobook.nextPage() }
+        )
+        .environmentObject(preferences)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      if showEdges {
+        ReaderSettingsPanelView(
+          containerHeight: geo.size.height,
+          isPresented: $settings.isPresented,
+          dragOffset: $settings.dragOffset,
+          isLocked: $settings.isLocked,
+          searchVisible: $search.isVisible,
+          searchQuery: $search.query,
+          audiobookEnabled: $audiobookEnabled,
+          onEnableAudiobook: enableAudiobook,
+          onDisableAudiobook: disableAudiobook,
+          offlineEnabled: $offlineEnabled,
+          onEnableOffline: enableOffline,
+          onDisableOffline: disableOffline,
+          offlineSubtitle: offlineSubtitle,
+          offlineIsAvailable: offlineIsAvailable,
+          askAI: askAI
+        )
+        .transition(.move(edge: .bottom).combined(with: .opacity))
+      }
+    }
+    .overlay(alignment: .bottom) {
+      if showEdges, !shouldUseContinuousScroll && !settings.isPresented && !audiobookEnabled {
+        ReaderBottomPagerView(
+          currentIndex: viewModel.currentIndex,
+          totalPages: viewModel.pages.count,
+          onPrevious: viewModel.goToPreviousPage,
+          onNext: viewModel.goToNextPage
+        )
+        // Sit down in the bottom "blank" safe-area space, but keep a tiny gap for the Home indicator.
+        .padding(.bottom, max(6, geo.safeAreaInsets.bottom * 0.12))
+      }
+    }
+  }
+
   @MainActor
   private func applyReaderBrightnessIfPossible() {
     let desired = CGFloat(min(1.0, max(0.0, preferences.brightness)))
@@ -693,7 +716,7 @@ struct ReaderView: View {
     preferences.continuousScrollForShortDocs
       && !viewModel.isLoading
       && viewModel.pages.count > 0
-      && viewModel.pages.count < shortDocContinuousScrollMaxPages
+      && viewModel.pages.count < ReaderLimits.continuousScrollMaxPages
   }
 
   private func handleBack() {
@@ -1091,5 +1114,41 @@ struct ReaderView: View {
     guard total > 1 else { return nil }
     let idx = min(max(0, startPage - 1), total - 1)
     return Double(idx) / Double(total - 1)
+  }
+}
+
+/// Tiny view used to resolve the `UIScreen` the reader is actually displayed on.
+/// Avoids `UIScreen.main` where possible (multi-window / external display).
+private struct ReaderScreenAccessor: UIViewRepresentable {
+  let onResolve: (UIScreen) -> Void
+
+  func makeUIView(context: Context) -> ReaderScreenAccessorView {
+    let v = ReaderScreenAccessorView()
+    v.onResolve = onResolve
+    return v
+  }
+
+  func updateUIView(_ uiView: ReaderScreenAccessorView, context: Context) {
+    uiView.onResolve = onResolve
+    uiView.resolveIfPossible()
+  }
+}
+
+private final class ReaderScreenAccessorView: UIView {
+  var onResolve: ((UIScreen) -> Void)?
+
+  override func didMoveToWindow() {
+    super.didMoveToWindow()
+    resolveIfPossible()
+  }
+
+  override func layoutSubviews() {
+    super.layoutSubviews()
+    resolveIfPossible()
+  }
+
+  func resolveIfPossible() {
+    guard let screen = window?.windowScene?.screen ?? window?.screen else { return }
+    onResolve?(screen)
   }
 }

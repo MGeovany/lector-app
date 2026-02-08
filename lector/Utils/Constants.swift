@@ -23,6 +23,12 @@ public let MAX_AI_TOKENS_PREMIUM_PER_MONTH: Int = 500_000
 // Note: backend enforcement must also match this value.
 public let MAX_AI_TOKENS_TRIAL_PER_MONTH: Int = 50_000
 
+enum ReaderLimits {
+  /// Continuous/infinite scroll will only apply to documents shorter than this page count.
+  /// Kept as a shared constant so Preferences UI matches Reader behavior.
+  static let continuousScrollMaxPages: Int = 10
+}
+
 enum APIConfig {
   /// Prefer Info.plist configuration (set via Xcode build settings). Falls back to hardcoded defaults.
   static var baseURL: URL {

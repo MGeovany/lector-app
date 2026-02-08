@@ -171,6 +171,13 @@ struct ReaderContentScrollView: View {
           proxy.scrollTo(topAnchorID, anchor: .top)
         }
       }
+      .onChange(of: showSearch) { _, isVisible in
+        guard isVisible else { return }
+        // When opening search, jump to the top so the search bar is visible.
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+          proxy.scrollTo(topAnchorID, anchor: .top)
+        }
+      }
 
       .onChange(of: scrollToPageToken) { _, _ in
         guard shouldUseContinuousScroll else { return }

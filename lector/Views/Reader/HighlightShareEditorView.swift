@@ -103,7 +103,7 @@ struct HighlightShareEditorView: View {
           }
 
         // Centered content
-        VStack(spacing: 22) {
+        VStack(spacing: 16) {
           previewCard
           buttons
         }
@@ -162,7 +162,7 @@ struct HighlightShareEditorView: View {
   }
 
   private var buttons: some View {
-    VStack(spacing: 10) {
+    VStack(spacing: 8) {
       Button {
         Task { await persistOnly() }
       } label: {
@@ -176,7 +176,7 @@ struct HighlightShareEditorView: View {
           }
         }
       }
-      .buttonStyle(LectorPrimaryCapsuleButtonStyle())
+      .buttonStyle(LectorCompactCapsuleButtonStyle())
       .disabled(isSaving || isPersistingOnly)
       .opacity((isSaving || isPersistingOnly) ? 0.7 : 1.0)
 
@@ -196,7 +196,7 @@ struct HighlightShareEditorView: View {
           }
         }
       }
-      .buttonStyle(LectorPrimaryCapsuleButtonStyle())
+      .buttonStyle(LectorCompactCapsuleButtonStyle())
       .disabled(isSaving || isPersistingOnly)
       .opacity((isSaving || isPersistingOnly) ? 0.7 : 1.0)
     }

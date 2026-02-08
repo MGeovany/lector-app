@@ -10,6 +10,7 @@ import SwiftUI
 struct PreferencesView: View {
   @EnvironmentObject private var viewModel: PreferencesViewModel
   @Environment(\.colorScheme) private var colorScheme
+  @State private var isShowingContinuousScrollInfo: Bool = false
 
   var body: some View {
     NavigationStack {
@@ -73,7 +74,7 @@ struct PreferencesView: View {
                 icon: "text.book.closed.fill",
                 title: "Reading",
                 subtitle:
-                  "This will enable continuous scroll for short documents."
+                  "Continuous scroll shows the book as one long page. It only applies to documents under \(ReaderLimits.continuousScrollMaxPages) pages."
               ) {
                 Toggle(
                   "Continuous scroll",
@@ -170,7 +171,10 @@ struct PreferencesView: View {
       .onChange(of: viewModel.lineSpacing) { _, _ in
         viewModel.save()
       }
-      .onChange(of: viewModel.continuousScrollForShortDocs) { _, _ in
+      .onChange(of: viewModel.continuousScrollForShortDocs) { oldValue, newValue in
+        if !oldValue, newValue {
+          isShowingContinuousScrollInfo = true
+        }
         viewModel.save()
       }
       .onChange(of: viewModel.showHighlightsInText) { _, _ in
@@ -178,6 +182,13 @@ struct PreferencesView: View {
       }
       .onChange(of: viewModel.highlightColor) { _, _ in
         viewModel.save()
+      }
+      .alert("Continuous scroll", isPresented: $isShowingContinuousScrollInfo) {
+        Button("Got it", role: .cancel) {}
+      } message: {
+        Text(
+          "This reads like an “infinite” page instead of paged swipes. It will only show in the reader for documents under \(ReaderLimits.continuousScrollMaxPages) pages."
+        )
       }
     }
   }

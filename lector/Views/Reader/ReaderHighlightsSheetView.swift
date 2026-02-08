@@ -109,16 +109,34 @@ struct ReaderHighlightsSheetView: View {
   }
 
   private func share(highlight: RemoteHighlight) {
-    var parts: [String] = []
-    parts.append("“\(highlight.quote.trimmingCharacters(in: .whitespacesAndNewlines))”")
-    parts.append("\(book.title) — \(book.author)")
-    if let p = highlight.pageNumber {
-      parts.append("Page \(p)")
-    } else if let pr = highlight.progress {
-      parts.append("\(Int((min(1, max(0, pr)) * 100).rounded()))%")
+    let quote = highlight.quote.trimmingCharacters(in: .whitespacesAndNewlines)
+    Task { @MainActor in
+      do {
+        // Instagram generally requires an image/video; sharing plain text won't show IG targets.
+        let img = try await HighlightShareEditorView.renderShareImage(
+          quote: quote,
+          bookTitle: book.title,
+          author: book.author,
+          font: preferences.font,
+          fontSize: preferences.fontSize,
+          lineSpacing: preferences.lineSpacing,
+          theme: preferences.theme
+        )
+        shareItems = [img]
+      } catch {
+        // Fallback to text share if rendering fails.
+        var parts: [String] = []
+        parts.append("“\(quote)”")
+        parts.append("\(book.title) — \(book.author)")
+        if let p = highlight.pageNumber {
+          parts.append("Page \(p)")
+        } else if let pr = highlight.progress {
+          parts.append("\(Int((min(1, max(0, pr)) * 100).rounded()))%")
+        }
+        shareItems = [parts.joined(separator: "\n")]
+      }
+      isShowingShareSheet = true
     }
-    shareItems = [parts.joined(separator: "\n")]
-    isShowingShareSheet = true
   }
 }
 
@@ -194,6 +212,11 @@ private struct HighlightRowView: View {
               lineWidth: 1)
         )
     )
+    // Make the whole card tappable to navigate to the highlight.
+    .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    .onTapGesture {
+      onGoTo()
+    }
   }
 
   private var metaText: String {

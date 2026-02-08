@@ -11,7 +11,7 @@ struct ReaderBottomPagerView: View {
   private var canGoPrevious: Bool { currentIndex > 0 }
   private var canGoNext: Bool { currentIndex < max(0, totalPages - 1) }
   private let hitWidth: CGFloat = 44
-  private let hitHeight: CGFloat = 36
+  private let hitHeight: CGFloat = 40
 
   var body: some View {
     HStack(spacing: 8) {
@@ -62,7 +62,7 @@ struct ReaderBottomPagerView: View {
       .simultaneousGesture(DragGesture(minimumDistance: 0).onChanged { _ in }.onEnded { _ in })
     }
     .padding(.horizontal, 30)
-    .padding(.vertical, 2)
+    .padding(.vertical, 8)
     .background(
       RoundedRectangle(cornerRadius: 12, style: .continuous)
         .fill(preferences.theme.surfaceBackground)

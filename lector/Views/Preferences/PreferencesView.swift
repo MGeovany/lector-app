@@ -111,7 +111,7 @@ struct PreferencesView: View {
                               Circle()
                                 .stroke(
                                   viewModel.highlightColor == color
-                                    ? (colorScheme == .dark ? Color.white.opacity(0.5) : AppColors.matteBlack.opacity(0.4))
+                                    ? preferencesAccent.opacity(colorScheme == .dark ? 0.95 : 0.85)
                                     : Color.clear,
                                   lineWidth: 2.5
                                 )

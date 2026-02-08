@@ -52,6 +52,32 @@ struct HighlightShareEditorView: View {
   @State private var shareImage: UIImage?
   @State private var showShareSheet: Bool = false
 
+  /// Renders a share-ready image (Instagram-friendly) for a highlight.
+  @MainActor
+  static func renderShareImage(
+    quote: String,
+    bookTitle: String,
+    author: String,
+    font: ReadingFont,
+    fontSize: Double,
+    lineSpacing: Double,
+    theme: ReadingTheme
+  ) async throws -> UIImage {
+    let draft = HighlightShareDraft(
+      quote: quote,
+      bookTitle: bookTitle,
+      author: author,
+      format: .wide
+    )
+    return try await HighlightShareRenderer.render(
+      draft: draft,
+      font: font,
+      fontSize: fontSize,
+      lineSpacing: lineSpacing,
+      theme: theme
+    )
+  }
+
   init(
     quote: String,
     bookTitle: String,

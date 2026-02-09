@@ -231,9 +231,6 @@ struct ReaderSettingsMainSettingsView: View {
           onEnableOffline()
         } else {
           onDisableOffline()
-          withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-            isPresented = false
-          }
         }
       }
     )

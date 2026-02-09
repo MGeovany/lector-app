@@ -36,6 +36,9 @@ struct ReaderView: View {
   @State private var offlineMeta: RemoteOptimizedDocument? = nil
   @State private var offlineLastAutoDownloadAt: Date? = nil
   @State private var offlineMonitorTask: Task<Void, Never>? = nil
+  // Used to force UI refresh when local offline files change.
+  @State private var offlineAvailabilityToken: Int = 0
+  @State private var offlineIsAvailableState: Bool = false
 
   @State private var isDismissing: Bool = false
   @State private var didStartLoading: Bool = false
@@ -271,6 +274,7 @@ struct ReaderView: View {
       }
       if let id = book.remoteID, !id.isEmpty {
         offlineEnabled = OfflinePinStore.isPinned(remoteID: id)
+        offlineIsAvailableState = OptimizedPagesStore.hasLocalCopy(remoteID: id)
         refreshOfflineSubtitle(remoteID: id)
 
         startOfflineMonitor(remoteID: id)
@@ -822,10 +826,7 @@ struct ReaderView: View {
     OfflinePinStore.setPinned(remoteID: id, pinned: true)
     offlineEnabled = true
     offlineLastAutoDownloadAt = nil
-
-    withAnimation(.spring(response: 0.30, dampingFraction: 0.85)) {
-      settings.isPresented = false
-    }
+    offlineIsAvailableState = OptimizedPagesStore.hasLocalCopy(remoteID: id)
 
     if networkMonitor.isOnline, networkMonitor.isOnWiFi {
       Task { @MainActor in
@@ -841,6 +842,8 @@ struct ReaderView: View {
     OfflinePinStore.setPinned(remoteID: id, pinned: false)
     offlineEnabled = false
     OptimizedPagesStore.delete(remoteID: id)
+    offlineAvailabilityToken &+= 1
+    offlineIsAvailableState = false
     refreshOfflineSubtitle(remoteID: id)
     stopOfflineMonitor()
   }
@@ -851,11 +854,12 @@ struct ReaderView: View {
     offlineSaveMessage = "Downloading…"
     refreshOfflineSubtitle(remoteID: remoteID)
     print("[OfflineDownload] start id=\(remoteID)")
+    var didSaveLocalCopy: Bool = false
     defer {
       isOfflineSaving = false
       offlineSaveMessage = nil
       refreshOfflineSubtitle(remoteID: remoteID)
-      print("[OfflineDownload] end id=\(remoteID)")
+      print("[OfflineDownload] end id=\(remoteID) saved=\(didSaveLocalCopy)")
     }
 
     do {
@@ -887,13 +891,24 @@ struct ReaderView: View {
         )
 
         if let pages = opt.pages, !pages.isEmpty {
-          try? OptimizedPagesStore.savePages(
-            remoteID: remoteID,
-            pages: pages,
-            optimizedVersion: opt.optimizedVersion,
-            optimizedChecksumSHA256: opt.optimizedChecksumSHA256
-          )
-          if opt.processingStatus == "ready" {
+          do {
+            try OptimizedPagesStore.savePages(
+              remoteID: remoteID,
+              pages: pages,
+              optimizedVersion: opt.optimizedVersion,
+              optimizedChecksumSHA256: opt.optimizedChecksumSHA256
+            )
+            offlineAvailabilityToken &+= 1
+            offlineIsAvailableState = true
+            didSaveLocalCopy = true
+          } catch {
+            // Keep polling; saving locally is best-effort.
+            #if DEBUG
+              print("[OfflineDownload] savePages failed id=\(remoteID) error=\(error)")
+            #endif
+          }
+          // Only finish the flow when we actually saved a local copy.
+          if opt.processingStatus == "ready", didSaveLocalCopy || OptimizedPagesStore.hasLocalCopy(remoteID: remoteID) {
             print("[OfflineDownload] done status=ready id=\(remoteID)")
             return
           }
@@ -918,8 +933,8 @@ struct ReaderView: View {
   }
 
   private var offlineIsAvailable: Bool {
-    guard let id = book.remoteID, !id.isEmpty else { return false }
-    return OptimizedPagesStore.hasLocalCopy(remoteID: id)
+    _ = offlineAvailabilityToken
+    return offlineIsAvailableState
   }
 
   @MainActor private func attemptAutoDownloadIfNeeded(remoteID: String) {
@@ -996,6 +1011,8 @@ struct ReaderView: View {
           isOfflineSaving = false
           offlineSaveMessage = nil
           refreshOfflineSubtitle(remoteID: remoteID)
+          offlineAvailabilityToken &+= 1
+          offlineIsAvailableState = true
           return
         }
 

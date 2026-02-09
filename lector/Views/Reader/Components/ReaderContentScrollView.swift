@@ -10,6 +10,7 @@ struct ReaderContentScrollView: View {
   let horizontalPadding: CGFloat
   let shouldUseContinuousScroll: Bool
   let showTopChrome: Bool
+  let showBottomPagerOverlay: Bool
   let highlights: [RemoteHighlight]
 
   @Binding var showSearch: Bool
@@ -38,7 +39,16 @@ struct ReaderContentScrollView: View {
   private let scrollSpaceName: String = "readerScrollSpace"
 
   private var bottomContentPadding: CGFloat {
-    showTopChrome ? 8 : 4
+    // When the bottom pager overlays the content, avoid extra whitespace
+    // so the last visible line reaches the pager edge.
+    if showBottomPagerOverlay && !shouldUseContinuousScroll { return 0 }
+    return showTopChrome ? 8 : 4
+  }
+
+  private var endOfBookExtraBottomPadding: CGFloat {
+    // When the bottom pager is visible, add extra space on the last page
+    // so the final lines can scroll above the overlay.
+    showBottomPagerOverlay ? 96 : 0
   }
 
   var body: some View {
@@ -219,7 +229,8 @@ struct ReaderContentScrollView: View {
   }
 
   private var pagedText: some View {
-    SelectableTextView(
+    let isLastPage = viewModel.currentIndex >= max(0, viewModel.pages.count - 1)
+    return SelectableTextView(
       text: currentPageText,
       font: preferences.font.uiFont(size: CGFloat(preferences.fontSize)),
       textColor: UIColor(preferences.theme.surfaceText),
@@ -238,7 +249,7 @@ struct ReaderContentScrollView: View {
     .frame(maxWidth: .infinity, alignment: .leading)
     .padding(.horizontal, horizontalPadding)
     .padding(.top, 18)
-    .padding(.bottom, bottomContentPadding)
+    .padding(.bottom, bottomContentPadding + (isLastPage ? endOfBookExtraBottomPadding : 0))
   }
 
   private var currentPageText: String {

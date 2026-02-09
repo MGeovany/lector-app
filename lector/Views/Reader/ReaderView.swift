@@ -48,6 +48,10 @@ struct ReaderView: View {
   @State private var activeScreen: UIScreen? = nil
   @State private var originalSystemBrightness: CGFloat? = nil
 
+  // Pinch-to-zoom font sizing (reader surface).
+  @State private var pinchBaseFontSize: Double? = nil
+  @State private var pinchLastAppliedFontSize: Double? = nil
+
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let readingPositionService: ReadingPositionServicing = GoReadingPositionService()
   private let highlightsService: HighlightsServicing = GoHighlightsService()
@@ -56,6 +60,9 @@ struct ReaderView: View {
   @State private var isHighlightsSheetPresented: Bool = false
 
   private let horizontalPadding: CGFloat = 20
+  private let readerFontSizeMin: Double = 14
+  private let readerFontSizeMax: Double = 26
+  private let readerFontSizeStep: Double = 0.25
   #if DEBUG
     private let debugScrollLogs: Bool = true
   #else
@@ -394,6 +401,9 @@ struct ReaderView: View {
       horizontalPadding: horizontalPadding,
       shouldUseContinuousScroll: shouldUseContinuousScroll,
       showTopChrome: showEdges,
+      // Bottom pager is an overlay that covers text at the bottom edge.
+      showBottomPagerOverlay: showEdges && !shouldUseContinuousScroll && !settings.isPresented
+        && !audiobookEnabled,
       highlights: documentHighlights,
       showSearch: $search.isVisible,
       searchQuery: $search.query,
@@ -454,11 +464,51 @@ struct ReaderView: View {
             }
           }
 
-          if dx > 60 {
-            focusSwipeAdvancePage()
-          } else if dx < -60 {
+          // UX: swipe left = back, swipe right = forward (like most readers).
+          if dx < -60 {
             focusSwipeGoBackPage()
+          } else if dx > 60 {
+            focusSwipeAdvancePage()
           }
+        }
+    )
+    .simultaneousGesture(
+      MagnificationGesture()
+        .onChanged { scale in
+          guard !settings.isPresented else { return }
+          guard !search.isVisible else { return }
+          guard !highlight.isPresented else { return }
+          guard !viewModel.isLoading else { return }
+
+          if pinchBaseFontSize == nil {
+            pinchBaseFontSize = preferences.fontSize
+            pinchLastAppliedFontSize = preferences.fontSize
+          }
+
+          let base = pinchBaseFontSize ?? preferences.fontSize
+          var next = base * Double(scale)
+          next = clamp(next, min: readerFontSizeMin, max: readerFontSizeMax)
+          next = quantize(next, step: readerFontSizeStep)
+
+          // Avoid excessive re-renders while pinching.
+          if let last = pinchLastAppliedFontSize, abs(next - last) < (readerFontSizeStep * 0.5) {
+            return
+          }
+          pinchLastAppliedFontSize = next
+
+          if next != preferences.fontSize {
+            preferences.fontSize = next
+          }
+        }
+        .onEnded { _ in
+          pinchBaseFontSize = nil
+          pinchLastAppliedFontSize = nil
+          // Clamp once more and persist.
+          preferences.fontSize = clamp(
+            preferences.fontSize, min: readerFontSizeMin, max: readerFontSizeMax)
+          preferences.save()
+          // Clear any active text selection to avoid weird selection/handles after resizing.
+          highlight.clearSelectionToken &+= 1
         }
     )
     .onChange(of: geo.size, initial: true) { _, newSize in
@@ -569,8 +619,7 @@ struct ReaderView: View {
           onPrevious: viewModel.goToPreviousPage,
           onNext: viewModel.goToNextPage
         )
-        // Sit down in the bottom "blank" safe-area space, but keep a tiny gap for the Home indicator.
-        .padding(.bottom, max(6, geo.safeAreaInsets.bottom * 0.12))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
       }
     }
   }
@@ -717,6 +766,15 @@ struct ReaderView: View {
       && !viewModel.isLoading
       && viewModel.pages.count > 0
       && viewModel.pages.count < ReaderLimits.continuousScrollMaxPages
+  }
+
+  private func clamp(_ value: Double, min: Double, max: Double) -> Double {
+    Swift.min(max, Swift.max(min, value))
+  }
+
+  private func quantize(_ value: Double, step: Double) -> Double {
+    guard step > 0 else { return value }
+    return (value / step).rounded() * step
   }
 
   private func handleBack() {
@@ -866,8 +924,8 @@ struct ReaderView: View {
 
   @MainActor private func attemptAutoDownloadIfNeeded(remoteID: String) {
     guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
-    guard OptimizedPagesStore.loadManifest(remoteID: remoteID) == nil else { return }
-    guard offlineIsAvailable else { return }
+    guard networkMonitor.isOnline, networkMonitor.isOnWiFi else { return }
+    guard !OptimizedPagesStore.hasLocalCopy(remoteID: remoteID) else { return }
     guard !isOfflineSaving else { return }
 
     let now = Date()
@@ -934,7 +992,7 @@ struct ReaderView: View {
         guard offlineEnabled else { return }
         guard OfflinePinStore.isPinned(remoteID: remoteID) else { return }
 
-        if OptimizedPagesStore.loadManifest(remoteID: remoteID) != nil {
+        if OptimizedPagesStore.hasLocalCopy(remoteID: remoteID) {
           isOfflineSaving = false
           offlineSaveMessage = nil
           refreshOfflineSubtitle(remoteID: remoteID)
@@ -943,10 +1001,6 @@ struct ReaderView: View {
 
         if let meta = try? await documentsService.getOptimizedDocument(id: remoteID) {
           offlineMeta = meta
-          if meta.processingStatus == "ready" {
-            isOfflineSaving = false
-            offlineSaveMessage = nil
-          }
           refreshOfflineSubtitle(remoteID: remoteID)
         }
 

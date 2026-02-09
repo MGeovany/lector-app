@@ -97,7 +97,9 @@ struct PreferencesView: View {
                   HStack(spacing: 8) {
                     Text("Color")
                       .font(.parkinsans(size: 13, weight: .medium))
-                      .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.75) : AppColors.matteBlack.opacity(0.75))
+                      .foregroundStyle(
+                        colorScheme == .dark
+                          ? Color.white.opacity(0.75) : AppColors.matteBlack.opacity(0.75))
                     Spacer(minLength: 8)
                     HStack(spacing: 8) {
                       ForEach(ReadingHighlightColor.allCases) { color in
@@ -111,7 +113,7 @@ struct PreferencesView: View {
                               Circle()
                                 .stroke(
                                   viewModel.highlightColor == color
-                                    ? preferencesAccent.opacity(colorScheme == .dark ? 0.95 : 0.85)
+                                    ? preferencesAccent.opacity(colorScheme == .dark ? 0.45 : 0.25)
                                     : Color.clear,
                                   lineWidth: 2.5
                                 )
@@ -119,7 +121,8 @@ struct PreferencesView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityLabel(Text(color.title))
-                        .accessibilityAddTraits(viewModel.highlightColor == color ? .isSelected : [])
+                        .accessibilityAddTraits(
+                          viewModel.highlightColor == color ? .isSelected : [])
                       }
                     }
                   }

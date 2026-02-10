@@ -30,21 +30,12 @@ enum ReaderLimits {
 }
 
 enum APIConfig {
-  /// Prefer Info.plist configuration (set via Xcode build settings). Falls back to hardcoded defaults.
+  /// Use Info.plist API_BASE_URL (set via Xcode build settings). Debug → dev server; Release → production.
   static var baseURL: URL {
     let value =
       (Bundle.main.object(forInfoDictionaryKey: "API_BASE_URL") as? String)?.trimmingCharacters(
         in: .whitespacesAndNewlines)
-    #if DEBUG
-      #if targetEnvironment(simulator)
-        let fallback = "http://localhost:8080/api/v1"
-      #else
-        // On device, localhost points to the phone. Use API_BASE_URL to target your Mac.
-        let fallback = "https://reader-go-383281059490.us-central1.run.app/api/v1"
-      #endif
-    #else
-      let fallback = "https://reader-go-383281059490.us-central1.run.app/api/v1"
-    #endif
+    let fallback = "https://reader-go-dev-383281059490.us-central1.run.app/api/v1"
     return normalizeHTTPURL(value?.isEmpty == false ? value! : fallback, fallback: fallback)
   }
 

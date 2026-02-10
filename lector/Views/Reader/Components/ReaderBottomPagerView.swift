@@ -11,7 +11,7 @@ struct ReaderBottomPagerView: View {
   private var canGoPrevious: Bool { currentIndex > 0 }
   private var canGoNext: Bool { currentIndex < max(0, totalPages - 1) }
   private let hitSize: CGFloat = 42
-  private let buttonClusterMaxWidth: CGFloat = 200
+  private let buttonClusterMaxWidth: CGFloat = 280
 
   private var footerBackground: Color {
     // Solid (no opacity), but follows the reading theme.
@@ -95,7 +95,7 @@ struct ReaderBottomPagerView: View {
         }
         .frame(maxWidth: buttonClusterMaxWidth)
       }
-      .padding(.horizontal, 22)
+      .padding(.horizontal, 32)
       .padding(.vertical, 12)
     }
     .frame(maxWidth: .infinity)

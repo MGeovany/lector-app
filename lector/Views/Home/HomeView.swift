@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 struct HomeView: View {
   @Environment(\.colorScheme) private var colorScheme
@@ -32,45 +33,149 @@ struct HomeView: View {
 
   var body: some View {
     @Bindable var viewModel = viewModel
-    NavigationStack {
-      ZStack {
-        background.ignoresSafeArea()
-
-        VStack(alignment: .leading, spacing: 12) {
-          HomeHeaderView(
-            searchText: $viewModel.searchQuery,
-            onAddTapped: { showFilePicker = true }
-          )
-          .padding(.horizontal, 18)
-          .padding(.top, 14)
-
-          if !networkMonitor.isOnline {
-            Text(L10n.tr("Offline — showing cached library.", locale: locale))
-              .font(.system(size: 13, weight: .regular))
-              .foregroundStyle(.secondary)
-              .frame(maxWidth: .infinity, alignment: .center)
-              .padding(.horizontal, 18)
-              .padding(.vertical, 6)
+    homeNavigationStack(viewModel: viewModel, selectedBook: $viewModel.selectedBook)
+      .onAppear { networkMonitor.startIfNeeded() }
+      .fileImporter(
+        isPresented: $showFilePicker,
+        allowedContentTypes: Self.allowedImportTypes,
+        allowsMultipleSelection: false
+      ) { result in
+        switch result {
+        case .success(let urls):
+          if let url = urls.first {
+            Task { await addViewModel.uploadPickedDocument(url) }
           }
-
-          LibrarySectionTabsView(selected: $selectedSection)
-
-          TabView(selection: $selectedSection) {
-            ForEach(LibrarySection.allCases) { section in
-              LibrarySectionPageView(
-                section: section,
-                colorScheme: colorScheme,
-                onAddTapped: { showFilePicker = true }
-              )
-              .tag(section)
-            }
-          }
-          .tabViewStyle(.page(indexDisplayMode: .never))
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .failure(let error):
+          let message = error.localizedDescription
+          Task { @MainActor in viewModel.alertMessage = message }
         }
       }
+      .overlay(alignment: .top) {
+        if viewModel.isLoading && !viewModel.filteredBooks.isEmpty {
+          ProgressView()
+            .tint(colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack)
+            .padding(.top, 8)
+        }
+      }
+      .overlay(alignment: .bottom) {
+        if addViewModel.isUploading {
+          HStack(spacing: 10) {
+            ProgressView()
+            Text("Uploading…")
+              .font(.system(size: 13, weight: .semibold))
+          }
+          .padding(.horizontal, 14)
+          .padding(.vertical, 10)
+          .background(.ultraThinMaterial, in: Capsule(style: .continuous))
+          .padding(.bottom, 86)
+        }
+      }
+      .overlay(alignment: .top) {
+        if let toast {
+          UploadToastView(toast: toast)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+      }
+      .overlay {
+        if isPreparingToOpenUploadedDoc {
+          ZStack {
+            Color.black.opacity(0.18).ignoresSafeArea()
+            VStack(spacing: 10) {
+              ProgressView()
+              Text("Preparing your document…")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+          }
+          .transition(.opacity)
+        }
+      }
+      .onChange(of: addViewModel.didUploadSuccessfully) { _, didSucceed in
+        guard didSucceed else { return }
+        Task { @MainActor in
+          withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+            toast = UploadToastData(kind: .success, message: "Uploaded.")
+          }
+          addViewModel.didUploadSuccessfully = false
+          try? await Task.sleep(nanoseconds: 2_000_000_000)
+          withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
+        }
+      }
+      .onChange(of: addViewModel.alertMessage) { _, msg in
+        let trimmed = (msg ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        Task { @MainActor in
+          withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+            toast = UploadToastData(kind: .error, message: trimmed)
+          }
+          addViewModel.alertMessage = nil
+          try? await Task.sleep(nanoseconds: 3_000_000_000)
+          withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
+        }
+      }
+      .onChange(of: addViewModel.infoMessage) { _, msg in
+        let trimmed = (msg ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        Task { @MainActor in
+          withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
+            toast = UploadToastData(kind: .info, message: trimmed)
+          }
+          addViewModel.infoMessage = nil
+          try? await Task.sleep(nanoseconds: 3_000_000_000)
+          withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
+        }
+      }
+      .onAppear {
+        Task { await addViewModel.flushPendingUploadsIfPossible() }
+      }
+  }
+
+  @ViewBuilder
+  private func homeMainContent(viewModel: HomeViewModel) -> some View {
+    ZStack {
+      background.ignoresSafeArea()
+      VStack(alignment: .leading, spacing: 12) {
+        HomeHeaderView(
+          searchText: $viewModel.searchQuery,
+          onAddTapped: { showFilePicker = true }
+        )
+        .padding(.horizontal, 18)
+        .padding(.top, 14)
+        if !networkMonitor.isOnline {
+          Text(L10n.tr("Offline — showing cached library.", locale: locale))
+            .font(.system(size: 13, weight: .regular))
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 6)
+        }
+        LibrarySectionTabsView(selected: $selectedSection)
+        TabView(selection: $selectedSection) {
+          ForEach(LibrarySection.allCases) { section in
+            LibrarySectionPageView(
+              section: section,
+              colorScheme: colorScheme,
+              onAddTapped: { showFilePicker = true }
+            )
+            .tag(section)
+          }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+      }
+    }
+  }
+
+  @ViewBuilder
+  private func homeNavigationStack(viewModel: HomeViewModel, selectedBook: Binding<Book?>) -> some View {
+    NavigationStack {
+      homeMainContent(viewModel: viewModel)
       .toolbar(.hidden, for: .navigationBar)
-      .navigationDestination(item: $viewModel.selectedBook) { book in
+      .navigationDestination(item: selectedBook) { book in
         ReaderView(
           book: book,
           onProgressChange: { page, total, progressOverride in
@@ -99,11 +204,6 @@ struct HomeView: View {
         let remoteID = note.userInfo?["remoteID"] as? String
         guard let remoteID, !remoteID.isEmpty else { return }
 
-        // Show a loading overlay while the backend finishes processing.
-        prepareOpenTask?.cancel()
-        isPreparingToOpenUploadedDoc = true
-
-        // Navigate as soon as possible. Prefer the real book from the library list if present.
         let loc = Locale(identifier: (UserDefaults.standard.string(forKey: AppPreferenceKeys.language) ?? AppLanguage.english.rawValue) == AppLanguage.spanish.rawValue ? "es" : "en")
         let title = (note.userInfo?["title"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Document", locale: loc)
         let author = (note.userInfo?["author"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? L10n.tr("Unknown", locale: loc)
@@ -112,137 +212,40 @@ struct HomeView: View {
         let sizeBytes = (note.userInfo?["sizeBytes"] as? Int64) ?? 0
         let stableID = UUID(uuidString: remoteID) ?? UUID()
 
-        prepareOpenTask = Task { @MainActor in
-          _ = await viewModel.waitForOptimizedReady(documentID: remoteID)
-          isPreparingToOpenUploadedDoc = false
+        Task { @MainActor in
+          prepareOpenTask?.cancel()
+          isPreparingToOpenUploadedDoc = true
+          prepareOpenTask = Task { @MainActor in
+            _ = await viewModel.waitForOptimizedReady(documentID: remoteID)
+            isPreparingToOpenUploadedDoc = false
 
-          if let existing = viewModel.books.first(where: { $0.remoteID == remoteID }) {
-            viewModel.selectedBook = existing
-            return
+            if let existing = viewModel.books.first(where: { $0.remoteID == remoteID }) {
+              viewModel.selectedBook = existing
+              return
+            }
+
+            viewModel.selectedBook = Book(
+              id: stableID,
+              remoteID: remoteID,
+              title: title,
+              author: author,
+              createdAt: createdAt,
+              pagesTotal: pagesTotal,
+              currentPage: 1,
+              readingProgress: nil,
+              sizeBytes: sizeBytes,
+              lastOpenedAt: Date(),
+              lastOpenedDaysAgo: 0,
+              isRead: false,
+              isFavorite: false,
+              tags: []
+            )
+
+            Task { await viewModel.reload() }
           }
-
-          viewModel.selectedBook = Book(
-            id: stableID,
-            remoteID: remoteID,
-            title: title,
-            author: author,
-            createdAt: createdAt,
-            pagesTotal: pagesTotal,
-            currentPage: 1,
-            readingProgress: nil,
-            sizeBytes: sizeBytes,
-            lastOpenedAt: Date(),
-            lastOpenedDaysAgo: 0,
-            isRead: false,
-            isFavorite: false,
-            tags: []
-          )
-
-          // Kick a reload so the placeholder gets replaced by the real model quickly.
-          Task { await viewModel.reload() }
         }
       }
       .environment(viewModel)
-    }
-    .onAppear {
-      networkMonitor.startIfNeeded()
-    }
-    .fileImporter(
-      isPresented: $showFilePicker,
-      allowedContentTypes: Self.allowedImportTypes,
-      allowsMultipleSelection: false
-    ) { result in
-      switch result {
-      case .success(let urls):
-        if let url = urls.first {
-          Task { await addViewModel.uploadPickedDocument(url) }
-        }
-      case .failure(let error):
-        viewModel.alertMessage = error.localizedDescription
-      }
-    }
-    .overlay(alignment: .top) {
-      // Subtle, non-blocking loading indicator.
-      if viewModel.isLoading && !viewModel.filteredBooks.isEmpty {
-        ProgressView()
-          .tint(colorScheme == .dark ? Color.white.opacity(0.85) : AppColors.matteBlack)
-          .padding(.top, 8)
-      }
-    }
-    .overlay(alignment: .bottom) {
-      if addViewModel.isUploading {
-        HStack(spacing: 10) {
-          ProgressView()
-          Text("Uploading…")
-            .font(.system(size: 13, weight: .semibold))
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: Capsule(style: .continuous))
-        .padding(.bottom, 86)
-      }
-    }
-    .overlay(alignment: .top) {
-      if let toast {
-        UploadToastView(toast: toast)
-          .padding(.top, 8)
-          .transition(.move(edge: .top).combined(with: .opacity))
-      }
-    }
-    .overlay {
-      if isPreparingToOpenUploadedDoc {
-        ZStack {
-          Color.black.opacity(0.18).ignoresSafeArea()
-          VStack(spacing: 10) {
-            ProgressView()
-            Text("Preparing your document…")
-              .font(.system(size: 13, weight: .semibold))
-              .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
-          }
-          .padding(.horizontal, 16)
-          .padding(.vertical, 14)
-          .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        }
-        .transition(.opacity)
-      }
-    }
-    .onChange(of: addViewModel.didUploadSuccessfully) { _, didSucceed in
-      guard didSucceed else { return }
-      withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-        toast = UploadToastData(kind: .success, message: "Uploaded.")
-      }
-      addViewModel.didUploadSuccessfully = false
-      Task { @MainActor in
-        try? await Task.sleep(nanoseconds: 2_000_000_000)
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
-      }
-    }
-    .onChange(of: addViewModel.alertMessage) { _, msg in
-      let trimmed = (msg ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !trimmed.isEmpty else { return }
-      withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-        toast = UploadToastData(kind: .error, message: trimmed)
-      }
-      addViewModel.alertMessage = nil
-      Task { @MainActor in
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
-      }
-    }
-    .onChange(of: addViewModel.infoMessage) { _, msg in
-      let trimmed = (msg ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-      guard !trimmed.isEmpty else { return }
-      withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) {
-        toast = UploadToastData(kind: .info, message: trimmed)
-      }
-      addViewModel.infoMessage = nil
-      Task { @MainActor in
-        try? await Task.sleep(nanoseconds: 3_000_000_000)
-        withAnimation(.spring(response: 0.28, dampingFraction: 0.9)) { toast = nil }
-      }
-    }
-    .onAppear {
-      Task { await addViewModel.flushPendingUploadsIfPossible() }
     }
   }
 
@@ -513,45 +516,116 @@ private struct NextUpTileView: View {
   @Environment(\.locale) private var locale
 
   var body: some View {
-    Button(action: onOpen) {
-      VStack(alignment: .leading, spacing: 8) {
-        Text(book.title.uppercased())
-          .font(.parkinsansSemibold(size: 16))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack)
-          .lineLimit(2)
+    Button(action: onOpen) { tileContent }
+      .buttonStyle(.plain)
+  }
 
-        Text(book.author)
-          .font(.parkinsans(size: 13, weight: .medium))
-          .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.45) : .secondary)
-          .lineLimit(1)
+  private var tileContent: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      titleText
+      authorText
+      progressRow
+      ProgressBarView(progress: book.progress)
+        .frame(height: 9)
+    }
+    .padding(14)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(tileBackground)
+  }
 
-        HStack {
-          Text(String(format: L10n.tr("PAGE %d OF %d", locale: locale), book.currentPage, book.pagesTotal))
-          Spacer()
-          Text("\(Int((book.progress * 100).rounded()))%")
-        }
-        .font(.parkinsans(size: 12, weight: .medium))
-        .foregroundStyle(colorScheme == .dark ? Color.white.opacity(0.55) : .secondary)
+  private var titleText: some View {
+    ClippedMultilineLabel(
+      text: displayTitle,
+      font: titleUIFont,
+      textColor: UIColor(titleColor),
+      numberOfLines: 2
+    )
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
 
-        ProgressBarView(progress: book.progress)
-          .frame(height: 9)
-      }
-      .padding(14)
-      .frame(maxWidth: .infinity, alignment: .leading)
-      .background(
+  /// Avoid SwiftUI ellipsis rendering ("..."/":::" in some fonts) by truncating the string ourselves.
+  private var displayTitle: String {
+    let t = book.title.uppercased()
+    // Conservative character cap to fit typical tile widths without triggering ellipsis.
+    // (We prefer a hard cut over trailing dots.)
+    let cap = 32
+    if t.count <= cap { return t }
+    return String(t.prefix(cap))
+  }
+
+  private var titleUIFont: UIFont {
+    // Parkinsans-Regular is the only shipped variant; fallback to system semibold.
+    UIFont(name: "Parkinsans-Regular", size: 16) ?? UIFont.systemFont(ofSize: 16, weight: .semibold)
+  }
+
+  private var authorText: some View {
+    Text(book.author)
+      .font(.parkinsans(size: 13, weight: .medium))
+      .foregroundStyle(authorColor)
+      .lineLimit(1)
+  }
+
+  private var progressRow: some View {
+    HStack {
+      Text(String(format: L10n.tr("PAGE %d OF %d", locale: locale), book.currentPage, book.pagesTotal))
+      Spacer()
+      Text("\(Int((book.progress * 100).rounded()))%")
+    }
+    .font(.parkinsans(size: 12, weight: .medium))
+    .foregroundStyle(progressColor)
+  }
+
+  private var tileBackground: some View {
+    RoundedRectangle(cornerRadius: 18, style: .continuous)
+      .fill(tileFill)
+      .overlay(
         RoundedRectangle(cornerRadius: 18, style: .continuous)
-          .fill(colorScheme == .dark ? Color.white.opacity(0.06) : Color(.systemBackground))
-          .overlay(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-              .stroke(colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.30), lineWidth: 1)
-          )
+          .stroke(tileStroke, lineWidth: 1)
       )
-    }
-    .buttonStyle(.plain)
-    .overlay(alignment: .topTrailing) {
-      BookOptionsMenu(book: book)
-        .padding(6)
-    }
+  }
+
+  private var titleColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.92) : AppColors.matteBlack
+  }
+
+  private var authorColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.45) : .secondary
+  }
+
+  private var progressColor: Color {
+    colorScheme == .dark ? Color.white.opacity(0.55) : .secondary
+  }
+
+  private var tileFill: Color {
+    colorScheme == .dark ? Color.white.opacity(0.06) : Color(.systemBackground)
+  }
+
+  private var tileStroke: Color {
+    colorScheme == .dark ? Color.white.opacity(0.10) : Color(.separator).opacity(0.30)
+  }
+}
+
+/// UILabel wrapper that truncates by **clipping** (no ellipsis).
+private struct ClippedMultilineLabel: UIViewRepresentable {
+  let text: String
+  let font: UIFont
+  let textColor: UIColor
+  let numberOfLines: Int
+
+  func makeUIView(context: Context) -> UILabel {
+    let label = UILabel()
+    label.numberOfLines = numberOfLines
+    label.lineBreakMode = .byClipping
+    label.adjustsFontForContentSizeCategory = true
+    label.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+    label.setContentCompressionResistancePriority(.defaultLow, for: .vertical)
+    return label
+  }
+
+  func updateUIView(_ uiView: UILabel, context: Context) {
+    uiView.text = text
+    uiView.font = font
+    uiView.textColor = textColor
   }
 }
 
@@ -582,6 +656,8 @@ private struct RecentlyAddedRowView: View {
         }
 
         Spacer(minLength: 0)
+
+        BookOptionsMenu(book: book)
 
         Circle()
           .strokeBorder(colorScheme == .dark ? Color.white.opacity(0.22) : AppColors.matteBlack.opacity(0.35), lineWidth: 1.25)

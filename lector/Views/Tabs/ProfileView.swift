@@ -26,62 +26,124 @@ struct ProfileView: View {
   private let documentsService: DocumentsServicing = GoDocumentsService()
   private let api: APIClient = APIClient()
 
-  // @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english // Used by Language row (commented out)
-    .rawValue
+  // @AppStorage(AppPreferenceKeys.language) private var languageRawValue: String = AppLanguage.english.rawValue // Used by Language row (commented out)
   @AppStorage(AppPreferenceKeys.theme) private var themeRawValue: String = AppTheme.dark.rawValue
   @AppStorage(AppPreferenceKeys.accountDisabled) private var accountDisabled: Bool = false
 
   private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
   var body: some View {
-
     NavigationStack {
-      List {
-        Section {
-          if session.isAuthenticated {
-            if let profile = session.profile {
-              ProfileHeaderRowView(
-                name: profile.displayName,
-                email: profile.email,
-                avatarURL: profile.avatarURL,
-                badge: profileBadge
-              )
-            } else {
-              ProfileHeaderRowView(
-                name: "Loading…",
-                email: "Retrieving your profile",
-                badge: profileBadge
-              )
-            }
+      profileListContent
+      .listStyle(.insetGrouped)
+      .listSectionSpacing(8)
+      .navigationBarTitleDisplayMode(.inline)
+      .safeAreaInset(edge: .bottom, spacing: 0) {
+        Color.clear.frame(height: 62)
+      }
+      .sheet(
+        isPresented: Binding(
+          get: { showPremiumSheet && !isPad },
+          set: { newValue in
+            if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+          }
+        )
+      ) {
+        PremiumUpsellSheetView()
+          .environmentObject(subscription)
+      }
+      .fullScreenCover(
+        isPresented: Binding(
+          get: { showPremiumSheet && isPad },
+          set: { newValue in
+            if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
+          }
+        )
+      ) {
+        PremiumUpsellSheetView()
+          .environmentObject(subscription)
+      }
+      .sheet(isPresented: $showEditProfilePicture) {
+        EditProfilePictureSheetView()
+          .presentationDetents([.height(320)])
+          .presentationDragIndicator(.visible)
+      }
+      .task {
+        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
+        guard !isPreview else { return }
+        await subscription.refreshFromStoreKit()
+      }
+      .task(id: session.isAuthenticated) {
+        await loadStorageUsage()
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .documentsDidChange)) { _ in
+        Task { await loadStorageUsage() }
+      }
+      .overlay { profileConfirmOverlays }
+      .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showDeleteAccountConfirm)
+      .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showLogoutConfirm)
+      .alert("Account deleted", isPresented: $showAccountDeletedAlert) {
+        Button("OK", role: .cancel) {}
+      } message: {
+        Text("Local data cleared on this device.")
+      }
+      .overlay(alignment: .top) {
+        if let accountDeletionToast {
+          ProfileToastView(toast: accountDeletionToast)
+            .padding(.top, 8)
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
+      }
+    }
+    .task(id: session.isAuthenticated) {
+      await session.refreshProfileIfNeeded()
+    }
+  }
+
+  @ViewBuilder
+  private var profileListContent: some View {
+    List {
+      Section {
+        if session.isAuthenticated {
+          if let profile = session.profile {
+            ProfileHeaderRowView(
+              name: profile.displayName,
+              email: profile.email,
+              avatarURL: profile.avatarURL,
+              badge: profileBadge
+            )
           } else {
             ProfileHeaderRowView(
-              name: "Marlon Castro",
-              email: "marlon.castro@thefndrs.com",
+              name: "Loading…",
+              email: "Retrieving your profile",
               badge: profileBadge
             )
           }
-
-          Button {
-            showEditProfilePicture = true
-          } label: {
-            // flex space between.
-            HStack(alignment: .center, spacing: 10) {
-              Text("Edit profile picture")
-                .font(.parkinsans(size: 15, weight: .medium))
-                // matte si es tema white letras negras, si es tema negro letras blancas
-                .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
-
-              Spacer(minLength: 0)
-
-              Image(systemName: "shuffle")
-                .font(.parkinsans(size: 15, weight: .medium))
-                .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
-            }
-            .frame(maxWidth: .infinity)
-          }
+        } else {
+          ProfileHeaderRowView(
+            name: "Marlon Castro",
+            email: "marlon.castro@thefndrs.com",
+            badge: profileBadge
+          )
         }
 
-        Section("Subscription") {
+        Button {
+          showEditProfilePicture = true
+        } label: {
+          HStack(alignment: .center, spacing: 10) {
+            Text("Edit profile picture")
+              .font(.parkinsans(size: 15, weight: .medium))
+              .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
+            Spacer(minLength: 0)
+            Image(systemName: "shuffle")
+              .font(.parkinsans(size: 15, weight: .medium))
+              .foregroundStyle(colorScheme == .dark ? Color.white : AppColors.matteBlack)
+          }
+          .frame(maxWidth: .infinity)
+        }
+      }
+
+      Section("Subscription") {
           HStack {
             Text("Plan")
             Spacer()
@@ -242,104 +304,40 @@ struct ProfileView: View {
             )
           }
         }
-      }
-      .listStyle(.insetGrouped)
-      .listSectionSpacing(8)
-      .navigationBarTitleDisplayMode(.inline)
-      .safeAreaInset(edge: .bottom, spacing: 0) {
-        Color.clear.frame(height: 62)
-      }
-      // On iPad, present full-screen so the subscription UI is bigger.
-      .sheet(
-        isPresented: Binding(
-          get: { showPremiumSheet && !isPad },
-          set: { newValue in
-            if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
-          }
-        )
-      ) {
-        PremiumUpsellSheetView()
-          .environmentObject(subscription)
-      }
-      .fullScreenCover(
-        isPresented: Binding(
-          get: { showPremiumSheet && isPad },
-          set: { newValue in
-            if !newValue { showPremiumSheet = false } else { showPremiumSheet = true }
-          }
-        )
-      ) {
-        PremiumUpsellSheetView()
-          .environmentObject(subscription)
-      }
-      .sheet(isPresented: $showEditProfilePicture) {
-        EditProfilePictureSheetView()
-          .presentationDetents([.height(320)])
-          .presentationDragIndicator(.visible)
-      }
-      .task {
-        // In Xcode Previews we inject a fake SubscriptionStore (e.g. proYearly).
-        // Avoid overriding it by syncing real StoreKit entitlements.
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-        guard !isPreview else { return }
-        await subscription.refreshFromStoreKit()
-      }
-      .task(id: session.isAuthenticated) {
-        await loadStorageUsage()
-      }
-      .onReceive(NotificationCenter.default.publisher(for: .documentsDidChange)) { _ in
-        Task { await loadStorageUsage() }
-      }
-      .overlay {
-        if showDeleteAccountConfirm {
-          CenteredConfirmationModal(
-            title: "Delete account?",
-            message:
-              "Your account will be temporarily disabled while we process your request. All data will be permanently deleted, and you’ll receive an email confirmation once completed.",
-            confirmTitle: "Request deletion",
-            isDestructive: true,
-            onConfirm: {
-              showDeleteAccountConfirm = false
-              requestAccountDeletion()
-            },
-            onCancel: { showDeleteAccountConfirm = false }
-          )
-          .transition(.scale(scale: 0.98).combined(with: .opacity))
-        }
-
-        if showLogoutConfirm {
-          CenteredConfirmationModal(
-            title: "Log out?",
-            message: "This will sign you out on this device.",
-            confirmTitle: "Log out",
-            isDestructive: true,
-            onConfirm: {
-              showLogoutConfirm = false
-              session.signOut()
-              showLoggedOutAlert = true
-            },
-            onCancel: { showLogoutConfirm = false }
-          )
-          .transition(.scale(scale: 0.98).combined(with: .opacity))
-        }
-      }
-      .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showDeleteAccountConfirm)
-      .animation(.spring(response: 0.28, dampingFraction: 0.9), value: showLogoutConfirm)
-      .alert("Account deleted", isPresented: $showAccountDeletedAlert) {
-        Button("OK", role: .cancel) {}
-      } message: {
-        Text("Local data cleared on this device.")
-      }
-      .overlay(alignment: .top) {
-        if let accountDeletionToast {
-          ProfileToastView(toast: accountDeletionToast)
-            .padding(.top, 8)
-            .transition(.move(edge: .top).combined(with: .opacity))
-        }
-      }
     }
-    .task(id: session.isAuthenticated) {
-      await session.refreshProfileIfNeeded()
+  }
+
+  @ViewBuilder
+  private var profileConfirmOverlays: some View {
+    if showDeleteAccountConfirm {
+      CenteredConfirmationModal(
+        title: "Delete account?",
+        message:
+          "Your account will be temporarily disabled while we process your request. All data will be permanently deleted, and you'll receive an email confirmation once completed.",
+        confirmTitle: "Request deletion",
+        isDestructive: true,
+        onConfirm: {
+          showDeleteAccountConfirm = false
+          requestAccountDeletion()
+        },
+        onCancel: { showDeleteAccountConfirm = false }
+      )
+      .transition(.scale(scale: 0.98).combined(with: .opacity))
+    }
+    if showLogoutConfirm {
+      CenteredConfirmationModal(
+        title: "Log out?",
+        message: "This will sign you out on this device.",
+        confirmTitle: "Log out",
+        isDestructive: true,
+        onConfirm: {
+          showLogoutConfirm = false
+          session.signOut()
+          showLoggedOutAlert = true
+        },
+        onCancel: { showLogoutConfirm = false }
+      )
+      .transition(.scale(scale: 0.98).combined(with: .opacity))
     }
   }
 

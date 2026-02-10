@@ -18,6 +18,14 @@ struct ReaderView: View {
   @StateObject private var audiobook = ReaderAudiobookViewModel()
   @StateObject private var networkMonitor = NetworkMonitor.shared
 
+  private struct ReaderLayout {
+    let focusEnabled: Bool
+    let showEdges: Bool
+    let isFullBrightness: Bool
+    let contentMaxWidth: CGFloat?
+    let outerHorizontalPadding: CGFloat
+  }
+
   @State private var search = ReaderSearchState()
   @State private var highlight = ReaderHighlightState()
   @State private var settings = ReaderSettingsState()
@@ -84,125 +92,88 @@ struct ReaderView: View {
   }
 
   var body: some View {
-    let focusEnabled: Bool = settings.isLocked
-    let showEdges: Bool = !focusEnabled || chrome.isVisible
-    let isFullBrightness: Bool = preferences.brightness >= 0.999
+    let layout = makeLayout()
+    let scaffold = readerScaffold(layout: layout)
 
-    let contentMaxWidth: CGFloat? = (isFullBrightness && !settings.isPresented) ? .infinity : 720
-    let outerHorizontalPadding: CGFloat = readerOuterHorizontalPadding(
-      showEdges: showEdges,
-      isFullBrightness: isFullBrightness
-    )
-
-    return ZStack {
-      readerBackgroundView
-
-      VStack(spacing: 0) {
-        if showEdges {
-          ReaderCollapsibleTopBar(isVisible: true, measuredHeight: $chrome.measuredHeight) {
-            ReaderTopBarView(
-              horizontalPadding: horizontalPadding,
-              showReaderSettings: $settings.isPresented,
-              onShowHighlights: { isHighlightsSheetPresented = true },
-              onBack: handleBack
-            )
-          }
-        }
-
-        GeometryReader { geo in
-          readerScrollSurface(
-            geo: geo,
-            showEdges: showEdges,
-            focusEnabled: focusEnabled
-          )
-        }
-        // Allow paged mode to use the bottom safe-area space (user wants text + pager down there).
-        .ignoresSafeArea(.container, edges: .bottom)
-      }
-      .overlay { readerBrightnessDimOverlay }
-      // When brightness is at 100%, avoid the "boxed" look by letting the reading surface go full-bleed.
-      .frame(maxWidth: contentMaxWidth)
-      .frame(maxWidth: .infinity)
-      .padding(.horizontal, outerHorizontalPadding)
-    }
-    .toolbar(.hidden, for: .tabBar)
-    .toolbar(.hidden, for: .navigationBar)
-    .preferredColorScheme(readerStatusBarScheme)
-    .environment(\.colorScheme, readerStatusBarScheme)
-    .navigationBarBackButtonHidden(true)
-    .preference(key: TabBarHiddenPreferenceKey.self, value: !isDismissing)
-    .onAppear {
-      applyReaderBrightnessIfPossible()
-    }
-    .onDisappear {
-      restoreSystemBrightnessIfNeeded()
-    }
-    .onChange(of: preferences.brightness) { _, _ in
-      applyReaderBrightnessIfPossible()
-    }
-    .onChange(of: activeScreen) { _, _ in
-      applyReaderBrightnessIfPossible()
-    }
-    .onChange(of: scenePhase) { _, newPhase in
-      // Restore when leaving active, re-apply when returning.
-      switch newPhase {
-      case .active:
+    return scaffold
+      .toolbar(.hidden, for: .tabBar)
+      .toolbar(.hidden, for: .navigationBar)
+      .preferredColorScheme(readerStatusBarScheme)
+      .environment(\.colorScheme, readerStatusBarScheme)
+      .navigationBarBackButtonHidden(true)
+      .preference(key: TabBarHiddenPreferenceKey.self, value: !isDismissing)
+      .onAppear {
         applyReaderBrightnessIfPossible()
-      case .inactive, .background:
-        restoreSystemBrightnessIfNeeded()
-      @unknown default:
-        break
       }
-    }
-    .overlay {
-      if highlight.isPresented {
-        HighlightShareEditorView(
-          quote: highlight.selectedText,
-          bookTitle: book.title,
-          author: book.author,
-          documentID: book.remoteID,
-          pageNumber: highlight.pageNumber,
-          progress: highlight.progress,
-          onDismiss: {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-              highlight.dismiss()
-            }
-            if let id = book.remoteID, !id.isEmpty {
-              Task {
-                try? await Task.sleep(nanoseconds: 600_000_000)
-                documentHighlights =
-                  (try? await highlightsService.listHighlights(documentID: id)) ?? []
+      .onDisappear {
+        restoreSystemBrightnessIfNeeded()
+      }
+      .onChange(of: preferences.brightness) { _, _ in
+        applyReaderBrightnessIfPossible()
+      }
+      .onChange(of: activeScreen) { _, _ in
+        applyReaderBrightnessIfPossible()
+      }
+      .onChange(of: scenePhase) { _, newPhase in
+        // Restore when leaving active, re-apply when returning.
+        switch newPhase {
+        case .active:
+          applyReaderBrightnessIfPossible()
+        case .inactive, .background:
+          restoreSystemBrightnessIfNeeded()
+        @unknown default:
+          break
+        }
+      }
+      .overlay {
+        if highlight.isPresented {
+          HighlightShareEditorView(
+            quote: highlight.selectedText,
+            bookTitle: book.title,
+            author: book.author,
+            documentID: book.remoteID,
+            pageNumber: highlight.pageNumber,
+            progress: highlight.progress,
+            onDismiss: {
+              withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                highlight.dismiss()
+              }
+              if let id = book.remoteID, !id.isEmpty {
+                Task {
+                  try? await Task.sleep(nanoseconds: 600_000_000)
+                  documentHighlights =
+                    (try? await highlightsService.listHighlights(documentID: id)) ?? []
+                }
               }
             }
+          )
+          .environmentObject(preferences)
+          .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        }
+      }
+      .sheet(isPresented: $isHighlightsSheetPresented) {
+        ReaderHighlightsSheetView(
+          book: book,
+          highlights: $documentHighlights,
+          onGoToHighlight: { h in
+            goToHighlight(h)
+          },
+          onDeleteHighlight: { h in
+            await deleteHighlight(h)
+          },
+          onRefresh: {
+            await refreshHighlights()
           }
         )
         .environmentObject(preferences)
-        .transition(.opacity.combined(with: .scale(scale: 0.95)))
+        .presentationDetents([.medium, .large])
       }
-    }
-    .sheet(isPresented: $isHighlightsSheetPresented) {
-      ReaderHighlightsSheetView(
-        book: book,
-        highlights: $documentHighlights,
-        onGoToHighlight: { h in
-          goToHighlight(h)
-        },
-        onDeleteHighlight: { h in
-          await deleteHighlight(h)
-        },
-        onRefresh: {
-          await refreshHighlights()
+      .overlay {
+        if audiobook.isConverting {
+          ReaderAudiobookConvertingOverlayView()
+            .environmentObject(preferences)
         }
-      )
-      .environmentObject(preferences)
-      .presentationDetents([.medium, .large])
-    }
-    .overlay {
-      if audiobook.isConverting {
-        ReaderAudiobookConvertingOverlayView()
-          .environmentObject(preferences)
       }
-    }
     .overlay(alignment: .bottom) {
       if isOfflineSaving {
         HStack(spacing: 10) {
@@ -243,10 +214,10 @@ struct ReaderView: View {
       }
     }
     .onChange(of: settings.isPresented) { _, isPresented in
-      if focusEnabled, !isPresented, chrome.isVisible {
+      if settings.isLocked, !isPresented, chrome.isVisible {
         scheduleFocusAutoHide()
       }
-      if focusEnabled, isPresented {
+      if settings.isLocked, isPresented {
         cancelFocusAutoHide()
       }
       if isPresented {
@@ -354,6 +325,72 @@ struct ReaderView: View {
     return showEdges ? 12 : 6
   }
 
+  private func makeLayout() -> ReaderLayout {
+    let focusEnabled: Bool = settings.isLocked
+    let showEdges: Bool = !focusEnabled || chrome.isVisible
+    let isFullBrightness: Bool = preferences.brightness >= 0.999
+
+    let contentMaxWidth: CGFloat? = (isFullBrightness && !settings.isPresented) ? .infinity : 720
+    let outerHorizontalPadding: CGFloat = readerOuterHorizontalPadding(
+      showEdges: showEdges,
+      isFullBrightness: isFullBrightness
+    )
+
+    return ReaderLayout(
+      focusEnabled: focusEnabled,
+      showEdges: showEdges,
+      isFullBrightness: isFullBrightness,
+      contentMaxWidth: contentMaxWidth,
+      outerHorizontalPadding: outerHorizontalPadding
+    )
+  }
+
+  @ViewBuilder
+  private func debugOuterSurfaceBorder() -> some View {
+    #if DEBUG
+      Rectangle().stroke(Color.red, lineWidth: 1)
+    #else
+      EmptyView()
+    #endif
+  }
+
+  private func readerScaffold(layout: ReaderLayout) -> some View {
+    let mainStack = VStack(spacing: 0) {
+      if layout.showEdges {
+        ReaderCollapsibleTopBar(isVisible: true, measuredHeight: $chrome.measuredHeight) {
+          ReaderTopBarView(
+            horizontalPadding: horizontalPadding,
+            showReaderSettings: $settings.isPresented,
+            onShowHighlights: { isHighlightsSheetPresented = true },
+            onBack: handleBack
+          )
+        }
+      }
+
+      GeometryReader { geo in
+        readerScrollSurface(
+          geo: geo,
+          showEdges: layout.showEdges,
+          focusEnabled: layout.focusEnabled
+        )
+      }
+      // Allow paged mode to use the bottom safe-area space (user wants text + pager down there).
+      .ignoresSafeArea(.container, edges: .bottom)
+    }
+    // When brightness is at 100%, avoid the "boxed" look by letting the reading surface go full-bleed.
+    .frame(maxWidth: layout.contentMaxWidth)
+    .frame(maxWidth: .infinity)
+    .padding(.horizontal, layout.outerHorizontalPadding)
+    .overlay { debugOuterSurfaceBorder() }
+
+    return ZStack {
+      readerBackgroundView
+      mainStack
+    }
+    // Dim overlay should cover the full reader (including side margins).
+    .overlay { readerBrightnessDimOverlay }
+  }
+
   private var readerDimOpacity: Double {
     // If the user wants the reader dimmer than the device's current brightness,
     // apply a black overlay. If they want it brighter, we raise system brightness instead.
@@ -371,6 +408,15 @@ struct ReaderView: View {
       Color.black.opacity(dim)
         .ignoresSafeArea()
         .allowsHitTesting(false)
+#if DEBUG
+        // Debug: visualize where the dim overlay is actually applied.
+        .overlay {
+          Rectangle().stroke(
+            Color.red,
+            style: StrokeStyle(lineWidth: 1, dash: [6, 4], dashPhase: 0)
+          )
+        }
+#endif
     }
   }
 
@@ -907,7 +953,9 @@ struct ReaderView: View {
             #endif
           }
           // Only finish the flow when we actually saved a local copy.
-          if opt.processingStatus == "ready", didSaveLocalCopy || OptimizedPagesStore.hasLocalCopy(remoteID: remoteID) {
+          if opt.processingStatus == "ready",
+            didSaveLocalCopy || OptimizedPagesStore.hasLocalCopy(remoteID: remoteID)
+          {
             print("[OfflineDownload] done status=ready id=\(remoteID)")
             return
           }

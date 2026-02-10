@@ -304,9 +304,6 @@ struct HighlightShareEditorView: View {
       )
     } catch {
       // Non-fatal: sharing should still work even if persistence fails.
-      #if DEBUG
-        print("[HighlightShareEditorView] Failed to persist highlight: \(error)")
-      #endif
     }
   }
 }

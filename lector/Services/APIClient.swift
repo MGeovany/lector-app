@@ -269,27 +269,10 @@ final class APIClient {
     didRetryAfterRefresh: Bool
   ) async throws -> T {
     do {
-      #if DEBUG
-        let shouldLog =
-          request.url?.path.contains("/documents/") == true
-          && request.url?.path.contains("/optimized") == true
-        let startedAt = Date()
-        if shouldLog {
-          print("[API] -> \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "")")
-        }
-      #endif
-
       let (data, response) = try await session.data(for: request)
       guard let http = response as? HTTPURLResponse else {
         throw APIError.invalidResponse
       }
-
-      #if DEBUG
-        if shouldLog {
-          let ms = Int(Date().timeIntervalSince(startedAt) * 1000)
-          print("[API] <- \(http.statusCode) (\(ms)ms) \(data.count) bytes")
-        }
-      #endif
       let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
 
       if !(200...299).contains(http.statusCode) {
@@ -365,23 +348,6 @@ final class APIClient {
 
         return try APIClient.jsonDecoder.decode(T.self, from: data)
       } catch {
-        #if DEBUG
-          let urlString = request.url?.absoluteString ?? ""
-          let method = request.httpMethod ?? ""
-          let previewData = data.prefix(2_048)
-          let preview =
-            String(data: previewData, encoding: .utf8)
-            ?? "<non-utf8 body, \(data.count) bytes>"
-          print(
-            """
-            [APIClient] Decode failed
-              - request: \(method) \(urlString)
-              - status: \(http.statusCode)
-              - content-type: \(contentType)
-              - body-preview(\(previewData.count)/\(data.count) bytes): \(preview)
-            """
-          )
-        #endif
         #if canImport(Sentry)
           let event = Event(error: APIError.decoding)
           event.level = .error
@@ -402,16 +368,6 @@ final class APIClient {
     } catch let apiError as APIError {
       throw apiError
     } catch {
-      #if DEBUG
-        let shouldLog =
-          request.url?.path.contains("/documents/") == true
-          && request.url?.path.contains("/optimized") == true
-        if shouldLog {
-          print(
-            "[API] !! \(request.httpMethod ?? "") \(request.url?.absoluteString ?? "") error=\(error)"
-          )
-        }
-      #endif
       #if canImport(Sentry)
         let event = Event(error: error)
         event.level = .error

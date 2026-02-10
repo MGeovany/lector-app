@@ -1155,7 +1155,6 @@ struct FilterTabsView: View {
     .environmentObject(SubscriptionStore())
 }
 
-#if DEBUG
   private enum LibraryPreviewData {
     static var books: [Book] {
       let now = Date()
@@ -1292,4 +1291,3 @@ struct FilterTabsView: View {
       .environmentObject(PreferencesViewModel())
       .environmentObject(SubscriptionStore())
   }
-#endif

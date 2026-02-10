@@ -5,9 +5,6 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
     _ application: UIApplication,
     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
   ) -> Bool {
-    #if DEBUG
-    print("🔵 [API] Base URL: \(APIConfig.baseURL.absoluteString)")
-    #endif
     return true
   }
 

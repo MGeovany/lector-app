@@ -32,13 +32,8 @@ struct lectorApp: App {
         SentrySDK.start { options in
           options.dsn = dsn
 
-          #if DEBUG
-            options.environment = "debug"
-            options.debug = true
-          #else
-            options.environment = "release"
-            options.debug = false
-          #endif
+          options.environment = "release"
+          options.debug = false
 
           let short =
             (Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)

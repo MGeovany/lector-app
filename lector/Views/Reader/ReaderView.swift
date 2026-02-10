@@ -74,11 +74,7 @@ struct ReaderView: View {
   private let readerFontSizeMin: Double = 14
   private let readerFontSizeMax: Double = 26
   private let readerFontSizeStep: Double = 0.25
-  #if DEBUG
-    private let debugScrollLogs: Bool = true
-  #else
-    private let debugScrollLogs: Bool = false
-  #endif
+  private let debugScrollLogs: Bool = false
 
   init(
     book: Book,
@@ -229,19 +225,9 @@ struct ReaderView: View {
     .onChange(of: scroll.progress) { _, _ in updateAskAIPageContext() }
     .onAppear {
       networkMonitor.startIfNeeded()
-      #if DEBUG
-        print(
-          "[ReaderView] onAppear docID=\(book.remoteID ?? "nil") readerStatusBarScheme=\(readerStatusBarScheme) appThemeColorScheme=\(appThemeColorScheme)"
-        )
-      #endif
       applyReaderStatusBarStyle(readerStatusBarScheme)
       DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
         applyReaderStatusBarStyle(readerStatusBarScheme)
-        #if DEBUG
-          print(
-            "[ReaderView] onAppear delayed re-apply docID=\(book.remoteID ?? "nil") readerStatusBarScheme=\(readerStatusBarScheme)"
-          )
-        #endif
       }
       if let id = book.remoteID, !id.isEmpty {
         offlineEnabled = OfflinePinStore.isPinned(remoteID: id)
@@ -272,19 +258,9 @@ struct ReaderView: View {
       updateAskAIPageContext()
     }
     .onChange(of: readerStatusBarScheme, initial: true) { _, newScheme in
-      #if DEBUG
-        print(
-          "[ReaderView] onChange(readerStatusBarScheme) docID=\(book.remoteID ?? "nil") initial/change -> newScheme=\(newScheme)"
-        )
-      #endif
       applyReaderStatusBarStyle(newScheme)
     }
     .onDisappear {
-      #if DEBUG
-        print(
-          "[ReaderView] onDisappear docID=\(book.remoteID ?? "nil") restoring appThemeColorScheme=\(appThemeColorScheme)"
-        )
-      #endif
       applyReaderStatusBarStyle(appThemeColorScheme)
       disableAudiobook()
       cancelFocusAutoHide()
@@ -345,15 +321,6 @@ struct ReaderView: View {
     )
   }
 
-  @ViewBuilder
-  private func debugOuterSurfaceBorder() -> some View {
-    #if DEBUG
-      Rectangle().stroke(Color.red, lineWidth: 1)
-    #else
-      EmptyView()
-    #endif
-  }
-
   private func readerScaffold(layout: ReaderLayout) -> some View {
     let mainStack = VStack(spacing: 0) {
       if layout.showEdges {
@@ -381,7 +348,6 @@ struct ReaderView: View {
     .frame(maxWidth: layout.contentMaxWidth)
     .frame(maxWidth: .infinity)
     .padding(.horizontal, layout.outerHorizontalPadding)
-    .overlay { debugOuterSurfaceBorder() }
 
     return ZStack {
       readerBackgroundView
@@ -408,15 +374,6 @@ struct ReaderView: View {
       Color.black.opacity(dim)
         .ignoresSafeArea()
         .allowsHitTesting(false)
-#if DEBUG
-        // Debug: visualize where the dim overlay is actually applied.
-        .overlay {
-          Rectangle().stroke(
-            Color.red,
-            style: StrokeStyle(lineWidth: 1, dash: [6, 4], dashPhase: 0)
-          )
-        }
-#endif
     }
   }
 
@@ -716,9 +673,6 @@ struct ReaderView: View {
       documentHighlights.removeAll { $0.id == h.id }
     } catch {
       // Non-blocking; keep existing list if delete fails.
-      #if DEBUG
-        print("[ReaderView] Failed to delete highlight: \(error)")
-      #endif
     }
   }
 
@@ -780,29 +734,11 @@ struct ReaderView: View {
     let windows = scenes.flatMap(\.windows)
     let keyWindow = windows.first(where: \.isKeyWindow)
 
-    #if DEBUG
-      let readerTheme = preferences.theme
-      let appTheme = AppTheme(rawValue: appThemeRawValue) ?? .dark
-      print(
-        "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") scheme=\(String(describing: scheme)) uiStyle=\(uiStyle.rawValue) readerTheme=\(readerTheme) appTheme=\(appTheme) windowsCount=\(windows.count) keyWindow=\(keyWindow != nil)"
-      )
-    #endif
-
     guard let window = keyWindow ?? windows.first else {
-      #if DEBUG
-        print(
-          "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") FAILED: no window"
-        )
-      #endif
       return
     }
     window.overrideUserInterfaceStyle = uiStyle
     window.rootViewController?.overrideUserInterfaceStyle = uiStyle
-    #if DEBUG
-      print(
-        "[ReaderView] applyReaderStatusBarStyle docID=\(book.remoteID ?? "nil") SET window+rootVC.overrideUserInterfaceStyle=\(uiStyle.rawValue)"
-      )
-    #endif
   }
 
   /// Status bar style while in reader: follows *reader* theme (day → light bar, night/amber → dark bar).
@@ -948,9 +884,6 @@ struct ReaderView: View {
             didSaveLocalCopy = true
           } catch {
             // Keep polling; saving locally is best-effort.
-            #if DEBUG
-              print("[OfflineDownload] savePages failed id=\(remoteID) error=\(error)")
-            #endif
           }
           // Only finish the flow when we actually saved a local copy.
           if opt.processingStatus == "ready",

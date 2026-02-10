@@ -226,10 +226,6 @@ struct ReaderContentScrollView: View {
     .padding(.horizontal, horizontalPadding)
     .padding(.top, 18)
     .padding(.bottom, bottomContentPadding)
-    #if DEBUG
-      // Debug: visualize where `horizontalPadding` is applied.
-      .overlay { Rectangle().stroke(Color.red, lineWidth: 1) }
-    #endif
   }
 
   private var pagedText: some View {
@@ -254,10 +250,6 @@ struct ReaderContentScrollView: View {
     .padding(.horizontal, horizontalPadding)
     .padding(.top, 18)
     .padding(.bottom, bottomContentPadding + (isLastPage ? endOfBookExtraBottomPadding : 0))
-    #if DEBUG
-      // Debug: visualize where `horizontalPadding` is applied.
-      .overlay { Rectangle().stroke(Color.red, lineWidth: 1) }
-    #endif
   }
 
   private var currentPageText: String {

@@ -619,18 +619,16 @@ final class HomeViewModel {
   }
 }
 
-#if DEBUG
-  extension HomeViewModel {
-    static func previewLibrary(books: [Book]) -> HomeViewModel {
-      let vm = HomeViewModel()
-      vm.filter = .all
-      vm.searchQuery = ""
-      vm.books = books
-      vm.availableTags = ["Book", "Essay", "Notes", "Poetry"]
-      vm.isLoading = false
-      // Prevent `onAppear()` from calling `reload()` in previews.
-      vm.didLoadOnce = true
-      return vm
-    }
+extension HomeViewModel {
+  static func previewLibrary(books: [Book]) -> HomeViewModel {
+    let vm = HomeViewModel()
+    vm.filter = .all
+    vm.searchQuery = ""
+    vm.books = books
+    vm.availableTags = ["Book", "Essay", "Notes", "Poetry"]
+    vm.isLoading = false
+    // Prevent `onAppear()` from calling `reload()` in previews.
+    vm.didLoadOnce = true
+    return vm
   }
-#endif
+}

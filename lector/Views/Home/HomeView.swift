@@ -227,7 +227,12 @@ struct HomeView: View {
             prepareOpenTask?.cancel()
             isPreparingToOpenUploadedDoc = true
             prepareOpenTask = Task { @MainActor in
-              _ = await viewModel.waitForOptimizedReady(documentID: remoteID)
+              do {
+                _ = try await viewModel.waitForOptimizedReady(documentID: remoteID)
+              } catch {
+                isPreparingToOpenUploadedDoc = false
+                return
+              }
               isPreparingToOpenUploadedDoc = false
 
               if let existing = viewModel.books.first(where: { $0.remoteID == remoteID }) {

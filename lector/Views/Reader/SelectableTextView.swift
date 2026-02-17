@@ -294,7 +294,7 @@ final class ShareableSelectionTextView: UITextView {
     }
 
     let share = UIAction(
-      title: "Share highlight",
+      title: "Save highlight",
       image: UIImage(systemName: "square.and.arrow.up")
     ) { [weak self] _ in
       self?.onShareSelection?(selected)
@@ -338,7 +338,7 @@ final class ShareableSelectionTextView: UITextView {
     guard let selectedNow else { return }
 
     let share = UIAction(
-      title: "Share highlight",
+      title: "Save highlight",
       image: UIImage(systemName: "square.and.arrow.up")
     ) { [weak self] _ in
       self?.onShareSelection?(selectedNow)

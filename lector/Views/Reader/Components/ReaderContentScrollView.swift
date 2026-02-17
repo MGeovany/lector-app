@@ -41,16 +41,16 @@ struct ReaderContentScrollView: View {
   private let scrollSpaceName: String = "readerScrollSpace"
 
   private var bottomContentPadding: CGFloat {
-    // When the bottom pager overlays the content, avoid extra whitespace
-    // so the last visible line reaches the pager edge.
-    if showBottomPagerOverlay && !shouldUseContinuousScroll { return 0 }
+    // When the bottom pager overlays the content, add padding so the text
+    // is not covered by the next/previous controls.
+    if showBottomPagerOverlay && !shouldUseContinuousScroll { return 96 }
     return showTopChrome ? 8 : 4
   }
 
   private var endOfBookExtraBottomPadding: CGFloat {
-    // When the bottom pager is visible, add extra space on the last page
-    // so the final lines can scroll above the overlay.
-    showBottomPagerOverlay ? 96 : 0
+    // Extra space on the last page when pager is visible (bottomContentPadding
+    // already covers the overlay for all pages; this is only if we need more).
+    0
   }
 
   var body: some View {

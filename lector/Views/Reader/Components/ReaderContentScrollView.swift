@@ -2,6 +2,13 @@ import SwiftUI
 
 struct ReaderContentScrollView: View {
   @EnvironmentObject private var preferences: PreferencesViewModel
+  private let debugNavLogs: Bool = {
+#if DEBUG
+    return true
+#else
+    return false
+#endif
+  }()
 
   let book: Book
   @ObservedObject var viewModel: ReaderViewModel
@@ -34,21 +41,26 @@ struct ReaderContentScrollView: View {
 
   @Binding var scrollToPageIndex: Int?
   @Binding var scrollToPageToken: Int
+  /// Anchor for scroll-to-page (e.g. .bottom so highlight at end of page is visible).
+  var scrollToPageAnchor: UnitPoint = .top
+
+  @Binding var scrollToText: String?
+  @Binding var scrollToTextToken: Int
 
   private let topAnchorID: String = "readerTop"
   private let scrollSpaceName: String = "readerScrollSpace"
 
   private var bottomContentPadding: CGFloat {
-    // When the bottom pager overlays the content, avoid extra whitespace
-    // so the last visible line reaches the pager edge.
-    if showBottomPagerOverlay && !shouldUseContinuousScroll { return 0 }
+    // When the bottom pager overlays the content, add padding so the text
+    // is not covered by the next/previous controls.
+    if showBottomPagerOverlay && !shouldUseContinuousScroll { return 96 }
     return showTopChrome ? 8 : 4
   }
 
   private var endOfBookExtraBottomPadding: CGFloat {
-    // When the bottom pager is visible, add extra space on the last page
-    // so the final lines can scroll above the overlay.
-    showBottomPagerOverlay ? 96 : 0
+    // Extra space on the last page when pager is visible (bottomContentPadding
+    // already covers the overlay for all pages; this is only if we need more).
+    0
   }
 
   var body: some View {
@@ -177,24 +189,42 @@ struct ReaderContentScrollView: View {
       .onChange(of: viewModel.currentIndex, initial: true) { _, newValue in
         guard !shouldUseContinuousScroll else { return }
         onPagedProgressChange(newValue + 1, max(1, viewModel.pages.count))
-        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+        // Defer to avoid fighting any pending in-page scroll requests.
+        DispatchQueue.main.async {
           proxy.scrollTo(topAnchorID, anchor: .top)
         }
       }
       .onChange(of: showSearch) { _, isVisible in
         guard isVisible else { return }
         // When opening search, jump to the top so the search bar is visible.
-        withAnimation(.spring(response: 0.22, dampingFraction: 0.9)) {
+        DispatchQueue.main.async {
           proxy.scrollTo(topAnchorID, anchor: .top)
         }
       }
 
       .onChange(of: scrollToPageToken) { _, _ in
+        if debugNavLogs {
+          print(
+            "[ReaderNav] scrollToPageToken=\(scrollToPageToken) shouldUseContinuousScroll=\(shouldUseContinuousScroll) idx=\(scrollToPageIndex.map(String.init) ?? "nil") pages=\(viewModel.pages.count) anchor=\(scrollToPageAnchor == .bottom ? "bottom" : "top")"
+          )
+        }
         guard shouldUseContinuousScroll else { return }
-        guard let idx = scrollToPageIndex else { return }
-        guard viewModel.pages.indices.contains(idx) else { return }
+        guard let idx = scrollToPageIndex else {
+          if debugNavLogs { print("[ReaderNav] scrollToPage: missing idx") }
+          return
+        }
+        guard viewModel.pages.indices.contains(idx) else {
+          if debugNavLogs { print("[ReaderNav] scrollToPage: idx out of range idx=\(idx) pages=\(viewModel.pages.count)") }
+          return
+        }
         withAnimation(.spring(response: 0.28, dampingFraction: 0.88)) {
-          proxy.scrollTo("page-\(idx)", anchor: .top)
+          proxy.scrollTo("page-\(idx)", anchor: scrollToPageAnchor)
+        }
+        if debugNavLogs {
+          let before = scrollOffsetY
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            print("[ReaderNav] scrollToPage done? idx=\(idx) offsetY \(Int(before)) -> \(Int(scrollOffsetY))")
+          }
         }
       }
     }
@@ -215,6 +245,8 @@ struct ReaderContentScrollView: View {
           highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
           highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
           clearSelectionToken: clearSelectionToken,
+          scrollToText: nil,
+          scrollToTextToken: 0,
           onShareSelection: { selected in
             onShareSelection(selected, idx + 1, scrollProgress)
           }
@@ -242,6 +274,8 @@ struct ReaderContentScrollView: View {
       highlightColor: preferences.highlightColor.highlightUIColor(for: preferences.theme),
       highlightOpacity: preferences.highlightColor.highlightOpacity(for: preferences.theme),
       clearSelectionToken: clearSelectionToken,
+      scrollToText: scrollToText,
+      scrollToTextToken: scrollToTextToken,
       onShareSelection: { selected in
         onShareSelection(selected, viewModel.currentIndex + 1, nil)
       }

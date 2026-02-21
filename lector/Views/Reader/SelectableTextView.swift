@@ -18,7 +18,13 @@ struct SelectableTextView: UIViewRepresentable {
   let onShareSelection: (String) -> Void
 
   private static let debugScrollLogs: Bool = false
-  private static let debugNavLogs: Bool = true
+  private static let debugNavLogs: Bool = {
+#if DEBUG
+    return true
+#else
+    return false
+#endif
+  }()
 
   func sizeThatFits(
     _ proposal: ProposedViewSize,

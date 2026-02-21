@@ -71,7 +71,13 @@ struct ReaderView: View {
     self.initialText = initialText
     let docVM = ReaderViewModel()
     _viewModel = StateObject(wrappedValue: docVM)
-    _sceneViewModel = StateObject(wrappedValue: ReaderSceneViewModel(documentViewModel: docVM, book: book, debugNavLogs: true))
+    _sceneViewModel = StateObject(wrappedValue: ReaderSceneViewModel(documentViewModel: docVM, book: book, debugNavLogs:
+#if DEBUG
+      true
+#else
+      false
+#endif
+    ))
     _offlineCoordinator = StateObject(wrappedValue: ReaderOfflineCoordinator(documentID: book.remoteID))
     _askAI = StateObject(wrappedValue: ReaderAskAIViewModel(documentID: book.remoteID ?? ""))
   }

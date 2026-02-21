@@ -2,7 +2,13 @@ import SwiftUI
 
 struct ReaderContentScrollView: View {
   @EnvironmentObject private var preferences: PreferencesViewModel
-  private let debugNavLogs: Bool = true
+  private let debugNavLogs: Bool = {
+#if DEBUG
+    return true
+#else
+    return false
+#endif
+  }()
 
   let book: Book
   @ObservedObject var viewModel: ReaderViewModel
